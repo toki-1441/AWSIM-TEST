@@ -110,6 +110,13 @@ namespace PhysicalAi.VehicleDynamics
             }
 
             public float DriveTorque(float throttle, float maximumDriveTorque) => _driven ? Mathf.Clamp(throttle, -1f, 1f) * maximumDriveTorque : 0f;
+
+            public void ResetState()
+            {
+                _angularVelocity = 0f;
+                IsGrounded = false;
+                LastTireForce = default;
+            }
         }
 
         [Header("Vehicle command")]
@@ -137,6 +144,18 @@ namespace PhysicalAi.VehicleDynamics
         public float SurfaceFriction { get => _surfaceFriction; set => _surfaceFriction = Mathf.Max(0.01f, value); }
         public int GroundedWheelCount { get; private set; }
         public float PeakTireUtilization { get; private set; }
+
+        /// <summary>Clears actuator and wheel-integrator state at an episode boundary.</summary>
+        public void ResetState()
+        {
+            _throttle = 0f;
+            _brake = 0f;
+            _steering = 0f;
+            GroundedWheelCount = 0;
+            PeakTireUtilization = 0f;
+            foreach (var wheel in _wheels)
+                wheel?.ResetState();
+        }
 
         void Awake()
         {

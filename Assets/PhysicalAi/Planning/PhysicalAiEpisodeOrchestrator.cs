@@ -49,6 +49,8 @@ namespace PhysicalAi.Planning
         GeneratedCourse _course;
         StreamingCourseState _streamingCourse;
         Rigidbody _rigidbody;
+        Vector3 _episodeStartPosition;
+        Quaternion _episodeStartRotation;
         bool _episodeEnded;
         public bool LastCollisionWasBlindCornerHazard { get; private set; }
         public bool LastCollisionWasOpponent { get; private set; }
@@ -68,6 +70,8 @@ namespace PhysicalAi.Planning
             if (_courseSettings.SampleSpacing <= 0f)
                 _courseSettings = CourseGenerationSettings.Default;
             _rigidbody = _vehicle != null ? _vehicle.GetComponent<Rigidbody>() : null;
+            _episodeStartPosition = transform.position;
+            _episodeStartRotation = transform.rotation;
         }
 
         void Start() => ResetEpisode(_episodeSeed);
@@ -85,6 +89,7 @@ namespace PhysicalAi.Planning
         void ResetEpisode(int seed, bool useHoldoutCourse)
         {
             _episodeSeed = seed;
+            ResetVehicleState();
             var courseOrigin = new Vector3(transform.position.x, 0f, transform.position.z);
             if (_useStreamingTraining && !useHoldoutCourse)
             {
@@ -110,6 +115,18 @@ namespace PhysicalAi.Planning
             _hazardSpawner?.SpawnCourseHazard(_course, seed);
             _demonstrationRecorder?.BeginEpisode(seed);
             CourseGenerated?.Invoke(_course);
+        }
+
+        void ResetVehicleState()
+        {
+            _vehicle?.ResetState();
+            if (_rigidbody == null)
+                return;
+            _rigidbody.position = _episodeStartPosition;
+            _rigidbody.rotation = _episodeStartRotation;
+            _rigidbody.linearVelocity = Vector3.zero;
+            _rigidbody.angularVelocity = Vector3.zero;
+            _rigidbody.Sleep();
         }
 
         void FixedUpdate()
