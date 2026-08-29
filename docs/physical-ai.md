@@ -73,6 +73,8 @@ $UNITY -batchmode -nographics -quit -projectPath . \
   -executeMethod PhysicalAi.Editor.PhysicalAiRuntimeSmokeTest.Run -logFile /dev/stdout
 
 python3 scripts/train_bc.py <demos>/*.jsonl --output Assets/PhysicalAi/Models/bc-policy.json
+
+python3 scripts/rl_policy_server.py --port 5015     # reference Python policy transport
 ```
 
 The training scene is generated rather than hand-authored, so a component that the scene must
@@ -119,7 +121,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | Zero-shot holdout evaluation | partly: fixed closed circuits and a persistent JSON report sink exist; surveyed geometry, checkpoints and target-metric subscribers remain |
 | **Camera field of view and occlusion** | partly: a rendered image channel is emitted for external policies; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | met structurally: deterministic chunks append ahead, rear state and logical history are bounded, and world state is shifted |
-| Sim RL via a Python interface | **not started**: no ML-Agents package in the manifest |
+| Sim RL via a Python interface | partly: `PythonRlBridge` provides a framework-neutral one-environment TCP protocol; a PPO/SAC trainer remains to be connected |
 | Definition-of-done metrics | partly: completion, lap-time, collision and departure rates are persisted after a holdout suite; blind-corner safety and head-to-head outcomes remain unmeasured |
 
 The remaining structural absence is the camera perception/learning path. Everything listed as
