@@ -3,7 +3,8 @@
     "rootNamespace": "PhysicalAi.Tests.EditMode",
     "references": [
         "PhysicalAi.VehicleDynamics",
-        "PhysicalAi.Course"
+        "PhysicalAi.Course",
+        "PhysicalAi.Safety"
     ],
     "includePlatforms": [
         "Editor"
