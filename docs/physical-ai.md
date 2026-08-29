@@ -74,7 +74,7 @@ $UNITY -batchmode -nographics -quit -projectPath . \
 
 python3 scripts/train_bc.py <demos>/*.jsonl --output Assets/PhysicalAi/Models/bc-policy.json
 
-python3 scripts/rl_policy_server.py --port 5015     # reference Python policy transport
+python3 scripts/rl_policy_server.py --port 5015     # single-environment REINFORCE trainer
 ```
 
 The training scene is generated rather than hand-authored, so a component that the scene must
@@ -121,7 +121,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | Zero-shot holdout evaluation | partly: fixed closed circuits and a persistent JSON report sink exist; surveyed geometry, checkpoints and target-metric subscribers remain |
 | **Camera field of view and occlusion** | partly: rendered JPEG camera frames are available through the Python bridge; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | met structurally: deterministic chunks append ahead, rear state and logical history are bounded, and world state is shifted |
-| Sim RL via a Python interface | partly: `PythonRlBridge` provides a framework-neutral one-environment TCP protocol; a PPO/SAC trainer remains to be connected |
+| Sim RL via a Python interface | partly: `PythonRlBridge` and a dependency-free single-environment REINFORCE trainer run end-to-end; a camera-capable PPO/SAC trainer remains to be connected |
 | Definition-of-done metrics | partly: completion, lap-time, collision and departure rates are persisted after a holdout suite; blind-corner safety and head-to-head outcomes remain unmeasured |
 
 The remaining structural absence is the camera perception/learning path. Everything listed as
