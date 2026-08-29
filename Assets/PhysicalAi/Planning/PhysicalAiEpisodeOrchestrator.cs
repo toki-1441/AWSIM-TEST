@@ -25,6 +25,7 @@ namespace PhysicalAi.Planning
         [SerializeField] BlindCornerHazardSpawner _hazardSpawner;
         [SerializeField] DomainRandomizer _domainRandomizer;
         [SerializeField] ProceduralCourseTrackBuilder _trackBuilder;
+        [SerializeField] CourseProgressMonitor _progressMonitor;
         [SerializeField] Camera _egoCamera;
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
@@ -35,6 +36,7 @@ namespace PhysicalAi.Planning
 
         GeneratedCourse _course;
         Rigidbody _rigidbody;
+        bool _episodeEnded;
 
         public event Action<GeneratedCourse> CourseGenerated;
         public event Action<PlanningObservation> ObservationReady;
@@ -57,6 +59,8 @@ namespace PhysicalAi.Planning
             _course = PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
             _domainRandomizer?.ApplyEpisodeSeed(seed);
             _trackBuilder?.Build(_course);
+            _progressMonitor?.SetCourse(_course);
+            _episodeEnded = false;
             _hazardSpawner?.SpawnEpisodeHazard(seed);
             _demonstrationRecorder?.BeginEpisode(seed);
             CourseGenerated?.Invoke(_course);
@@ -64,8 +68,15 @@ namespace PhysicalAi.Planning
 
         void FixedUpdate()
         {
-            if (_course == null || _vehicle == null || _lowLevelController == null || _rigidbody == null)
+            if (_episodeEnded || _course == null || _vehicle == null || _lowLevelController == null || _rigidbody == null)
                 return;
+
+            _progressMonitor?.UpdatePosition(_rigidbody.position);
+            if (_progressMonitor != null && _progressMonitor.IsOffCourse)
+            {
+                EndEpisode(false, true);
+                return;
+            }
 
             var waypointIndex = FindNearestWaypoint(_rigidbody.position);
             var waypoints = RelativeCourseObservation.Encode(_course, _rigidbody.position, _rigidbody.rotation, waypointIndex, _observationWaypointCount);
@@ -89,6 +100,9 @@ namespace PhysicalAi.Planning
 
         public void EndEpisode(bool collision, bool offCourse)
         {
+            if (_episodeEnded)
+                return;
+            _episodeEnded = true;
             var speed = _rigidbody == null ? 0f : _rigidbody.linearVelocity.magnitude;
             var safeSpeed = _course == null || _rigidbody == null
                 ? 0f

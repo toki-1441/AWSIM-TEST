@@ -57,11 +57,13 @@ namespace PhysicalAi.Editor
 
             var orchestrator = vehicle.AddComponent<PhysicalAiEpisodeOrchestrator>();
             var track = new GameObject("ProceduralTrack").AddComponent<ProceduralCourseTrackBuilder>();
+            var progress = vehicle.AddComponent<CourseProgressMonitor>();
             SetReference(orchestrator, "_vehicle", dynamics);
             SetReference(orchestrator, "_lowLevelController", controller);
             SetReference(orchestrator, "_egoCamera", camera);
             SetReference(orchestrator, "_domainRandomizer", randomizer);
             SetReference(orchestrator, "_trackBuilder", track);
+            SetReference(orchestrator, "_progressMonitor", progress);
 
             System.IO.Directory.CreateDirectory("Assets/PhysicalAi/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
