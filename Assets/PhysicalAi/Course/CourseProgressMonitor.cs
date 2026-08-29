@@ -39,6 +39,23 @@ namespace PhysicalAi.Course
                 _progressAtWaypoint[i] = _progressAtWaypoint[i - 1] + Vector3.Distance(course.Centerline[i - 1], course.Centerline[i]);
         }
 
+        /// <summary>Replaces an append-only streaming course without converting the extension itself into artificial progress reward.</summary>
+        public void ExtendCourse(GeneratedCourse course)
+        {
+            if (_course == null || course == null || course.Centerline.Count < _course.Centerline.Count)
+            {
+                SetCourse(course);
+                return;
+            }
+            _course = course;
+            var preservedProgress = ProgressMeters;
+            _progressAtWaypoint = new float[course.Centerline.Count];
+            for (var i = 1; i < _progressAtWaypoint.Length; i++)
+                _progressAtWaypoint[i] = _progressAtWaypoint[i - 1] + Vector3.Distance(course.Centerline[i - 1], course.Centerline[i]);
+            ProgressMeters = preservedProgress;
+            DeltaProgressMeters = 0f;
+        }
+
         public void UpdatePosition(Vector3 position)
         {
             if (_course == null || _course.Centerline.Count == 0)

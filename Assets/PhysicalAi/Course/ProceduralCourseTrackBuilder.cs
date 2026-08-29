@@ -20,12 +20,18 @@ namespace PhysicalAi.Course
         public void Build(GeneratedCourse course)
         {
             Clear();
+            Append(course, 1);
+        }
+
+        /// <summary>Adds newly appended centerline segments without rebuilding the existing road behind the vehicle.</summary>
+        public void Append(GeneratedCourse course, int firstCenterlineIndex)
+        {
             if (course == null || course.Centerline.Count < 2)
                 return;
 
             var root = _trackRoot == null ? transform : _trackRoot;
-            CreateCenterline(root, course);
-            for (var index = 1; index < course.Centerline.Count; index++)
+            UpdateCenterline(root, course);
+            for (var index = Mathf.Max(1, firstCenterlineIndex); index < course.Centerline.Count; index++)
             {
                 var start = course.Centerline[index - 1];
                 var end = course.Centerline[index];
@@ -40,8 +46,9 @@ namespace PhysicalAi.Course
                 segment.transform.position = (start + end) * 0.5f - Vector3.up * (_roadThickness * 0.5f);
                 segment.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
                 segment.transform.localScale = new Vector3(_roadWidth, _roadThickness, length + 0.05f);
-                CreateBoundary(root, $"BoundaryLeft-{SegmentCount:D4}", (start + end) * 0.5f + Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length);
-                CreateBoundary(root, $"BoundaryRight-{SegmentCount:D4}", (start + end) * 0.5f - Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length);
+                segment.AddComponent<CourseTrackSegment>().Configure(index, true);
+                CreateBoundary(root, $"BoundaryLeft-{SegmentCount:D4}", (start + end) * 0.5f + Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length).Configure(index, false);
+                CreateBoundary(root, $"BoundaryRight-{SegmentCount:D4}", (start + end) * 0.5f - Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length).Configure(index, false);
                 SegmentCount++;
             }
         }
@@ -61,25 +68,48 @@ namespace PhysicalAi.Course
             CenterlineRenderer = null;
         }
 
-        void CreateCenterline(Transform root, GeneratedCourse course)
+        /// <summary>Removes collider segments sufficiently behind the ego waypoint while preserving a safety buffer.</summary>
+        public void DiscardBefore(int nearestCenterlineIndex, int retainedWaypointsBehind)
         {
-            var lineObject = new GameObject("CourseCenterline");
-            lineObject.transform.SetParent(root, false);
-            var line = lineObject.AddComponent<LineRenderer>();
-            line.useWorldSpace = true;
+            var root = _trackRoot == null ? transform : _trackRoot;
+            var cutoff = nearestCenterlineIndex - Mathf.Max(0, retainedWaypointsBehind);
+            foreach (var segment in root.GetComponentsInChildren<CourseTrackSegment>())
+            {
+                if (segment.CenterlineIndex >= cutoff)
+                    continue;
+                if (segment.IsRoad)
+                    SegmentCount--;
+                if (Application.isPlaying)
+                    Destroy(segment.gameObject);
+                else
+                    DestroyImmediate(segment.gameObject);
+            }
+            SegmentCount = Mathf.Max(0, SegmentCount);
+        }
+
+        void UpdateCenterline(Transform root, GeneratedCourse course)
+        {
+            if (CenterlineRenderer == null)
+            {
+                var lineObject = new GameObject("CourseCenterline");
+                lineObject.transform.SetParent(root, false);
+                CenterlineRenderer = lineObject.AddComponent<LineRenderer>();
+                CenterlineRenderer.useWorldSpace = true;
+                CenterlineRenderer.startWidth = 0.025f;
+                CenterlineRenderer.endWidth = 0.025f;
+                CenterlineRenderer.numCornerVertices = 2;
+                CenterlineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+                CenterlineRenderer.startColor = Color.yellow;
+                CenterlineRenderer.endColor = Color.yellow;
+            }
+            var line = CenterlineRenderer;
             line.positionCount = course.Centerline.Count;
-            line.startWidth = 0.025f;
-            line.endWidth = 0.025f;
-            line.numCornerVertices = 2;
-            line.material = new Material(Shader.Find("Sprites/Default"));
-            line.startColor = Color.yellow;
-            line.endColor = Color.yellow;
             for (var index = 0; index < course.Centerline.Count; index++)
                 line.SetPosition(index, course.Centerline[index] + Vector3.up * 0.003f);
             CenterlineRenderer = line;
         }
 
-        void CreateBoundary(Transform root, string name, Vector3 position, Vector3 direction, float length)
+        CourseTrackSegment CreateBoundary(Transform root, string name, Vector3 position, Vector3 direction, float length)
         {
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             wall.name = name;
@@ -88,6 +118,7 @@ namespace PhysicalAi.Course
             wall.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
             wall.transform.localScale = new Vector3(_wallThickness, _wallHeight, length + _wallThickness);
             wall.AddComponent<CourseBoundary>();
+            return wall.AddComponent<CourseTrackSegment>();
         }
     }
 }

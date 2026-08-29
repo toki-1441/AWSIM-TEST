@@ -40,6 +40,23 @@ namespace PhysicalAi.Tests.EditMode
         }
 
         [Test]
+        public void StreamingState_AppendsContinuousDeterministicChunks()
+        {
+            var state = new StreamingCourseState();
+            state.Reset(17, CourseGenerationSettings.Default, Vector3.zero, 0f);
+            var first = state.Course;
+            var firstCount = first.Centerline.Count;
+            var tail = first.Centerline[firstCount - 1];
+
+            var firstNewIndex = state.AppendNextChunk();
+
+            Assert.That(firstNewIndex, Is.EqualTo(firstCount));
+            Assert.That(state.ChunkCount, Is.EqualTo(2));
+            Assert.That(state.Course.Centerline.Count, Is.GreaterThan(firstCount));
+            Assert.That(state.Course.Centerline[firstNewIndex - 1], Is.EqualTo(tail));
+        }
+
+        [Test]
         public void Encode_TranslationOfCourseAndEgoDoesNotChangeObservation()
         {
             var course = PhysicsConstrainedCourseGenerator.Generate(8, CourseGenerationSettings.Default, Vector3.zero, 0f);

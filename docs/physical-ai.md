@@ -81,7 +81,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (39 cases) and 2 PlayMode cases are passing.
+17 EditMode test files (41 cases) and 2 PlayMode cases are passing.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
@@ -118,7 +118,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | Offline BC from in-sim teleoperation | partly: recorder, trainer and policy exist, but the recorder is not in the scene and there is no teleoperation input |
 | Zero-shot holdout evaluation | partly: fixed seeds now generate separate closed circuits, but the report has no subscriber |
 | **Camera field of view and occlusion** | partly: a rendered image channel is emitted for external policies; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
-| **Endless streaming map with floating origin** | **not implemented** |
+| **Endless streaming map with floating origin** | partly: deterministic chunks append ahead and rear colliders are discarded; floating origin and bounded logical history remain |
 | Sim RL via a Python interface | **not started**: no ML-Agents package in the manifest |
 | Definition-of-done metrics | **not measurable**: no report sink, and no metric for blind-corner safety or head-to-head outcomes |
 
@@ -133,9 +133,9 @@ learning signal accumulated over inconsistent physics is silently wrong.
 1. **Vehicle physics verification.** The assembled TT-02 now has a PlayMode combined-slip
    friction-circle bound test. Steady-state cornering and braking calibration against telemetry
    remain to be added once those samples are available.
-2. **Endless streaming map and floating origin.** Resumable chunk generation, incremental build
-   and discard, and the origin shift. This changes what an episode is, so it should land before
-   any data is recorded.
+2. **Floating origin and bounded streaming history.** Resumable chunk generation, incremental
+   build and rear discard are in place. The remaining origin shift must move every world-position
+   holder together and bound the centreline/waypoint history before long-running data collection.
 3. **Camera-based policy training.** The rendered image channel exists; connect it to the
    external learning bridge so blind-corner behaviour is learned from pixels rather than only
    the conservative visibility bound.

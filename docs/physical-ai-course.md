@@ -11,20 +11,20 @@ discarded behind it. The reasons are throughput and realism: no episode-reset ov
 deliberately non-parallel environment, and it matches the deployment case of one attempt on a
 road never seen before.
 
-This has consequences that the current implementation does not yet meet:
+This is now implemented in part; the remaining constraints are explicit:
 
 - **Floating origin is a prerequisite.** Coordinates grow without bound, so single-precision
   degradation is inevitable unless the vehicle is kept near the origin and the world is shifted
   instead. Everything holding world positions has to shift together: the centreline, built road
   and wall geometry, opponents and hazards. Ego-relative observations are unaffected, which is
   one more reason the relative encoding is the right contract.
-- **Chunk lifecycle, not rebuild.** `ProceduralCourseTrackBuilder` currently clears and rebuilds
-  the whole track. Streaming needs incremental creation ahead and destruction behind.
-- **Generation must be resumable.** `PhysicsConstrainedCourseGenerator` produces a finite chain
-  from a seed in one call. Streaming needs to continue from the previous chunk's end pose and
-  heading.
-- **"Course completed" stops being an episode outcome.** There is no end of road, so an episode
-  ends on collision, departure, or a time limit — not on reaching the last waypoint.
+- **Chunk lifecycle is incremental.** `StreamingCourseState` deterministically continues chunks
+  from the prior end pose and heading. `ProceduralCourseTrackBuilder.Append` adds only the new
+  road and wall colliders, then discards a retained-window-external rear section. The rendered
+  centreline and logical waypoint history are intentionally retained for now, so floating-origin
+  work must also bound those structures.
+- **"Course completed" is not an outcome in training.** The orchestrator extends before the
+  streamed tail is reached. Evaluation explicitly selects the separate finite holdout loop.
 
 ## Evaluation map: closed-loop holdout
 

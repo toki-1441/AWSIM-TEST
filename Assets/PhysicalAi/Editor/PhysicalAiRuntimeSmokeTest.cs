@@ -30,7 +30,17 @@ namespace PhysicalAi.Editor
             if (orchestrator.Course == null || orchestrator.Course.Centerline.Count < 2 || track.SegmentCount < 1)
                 throw new System.InvalidOperationException("Episode reset did not generate a collider-backed course.");
 
-            Debug.Log($"Physical AI smoke test passed: {track.SegmentCount} road segments generated.");
+            var initialWaypointCount = orchestrator.Course.Centerline.Count;
+            var initialSegmentCount = track.SegmentCount;
+            var body = orchestrator.GetComponent<Rigidbody>();
+            if (body == null)
+                throw new System.InvalidOperationException("Training vehicle has no rigidbody.");
+            body.position = orchestrator.Course.Centerline[initialWaypointCount - 2] + Vector3.up * 0.1f;
+            orchestrator.SendMessage("FixedUpdate", SendMessageOptions.DontRequireReceiver);
+            if (orchestrator.Course.Centerline.Count <= initialWaypointCount || track.SegmentCount <= initialSegmentCount)
+                throw new System.InvalidOperationException("Streaming training road did not append a new chunk near its end.");
+
+            Debug.Log($"Physical AI smoke test passed: {track.SegmentCount} road segments generated after streaming extension.");
         }
     }
 }

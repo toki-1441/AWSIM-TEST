@@ -33,6 +33,9 @@ namespace PhysicalAi.Planning
         [SerializeField] HeadToHeadScenario _headToHeadScenario;
         [SerializeField] Camera _egoCamera;
         [SerializeField] CameraObservationSensor _cameraObservationSensor;
+        [SerializeField] bool _useStreamingTraining;
+        [SerializeField, Min(2)] int _streamingExtensionWaypointMargin = 40;
+        [SerializeField, Min(0)] int _streamingRetainedWaypointsBehind = 80;
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
         [SerializeField, Min(1)] int _observationWaypointCount = 6;
@@ -42,10 +45,12 @@ namespace PhysicalAi.Planning
         [SerializeField, Min(0.1f)] float _maximumVisibleDistance = 6f;
 
         GeneratedCourse _course;
+        StreamingCourseState _streamingCourse;
         Rigidbody _rigidbody;
         bool _episodeEnded;
 
         public event Action<GeneratedCourse> CourseGenerated;
+        public event Action<GeneratedCourse> CourseExtended;
         public event Action<PlanningObservation> ObservationReady;
         public event Action<CameraObservationFrame> CameraObservationReady;
         public event Action<bool, bool, bool> EpisodeFinished;
@@ -75,9 +80,19 @@ namespace PhysicalAi.Planning
         {
             _episodeSeed = seed;
             var courseOrigin = new Vector3(transform.position.x, 0f, transform.position.z);
-            _course = useHoldoutCourse
-                ? ClosedHoldoutCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y)
-                : PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
+            if (_useStreamingTraining && !useHoldoutCourse)
+            {
+                _streamingCourse = new StreamingCourseState();
+                _streamingCourse.Reset(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
+                _course = _streamingCourse.Course;
+            }
+            else
+            {
+                _streamingCourse = null;
+                _course = useHoldoutCourse
+                    ? ClosedHoldoutCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y)
+                    : PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
+            }
             _domainRandomizer?.ApplyEpisodeSeed(seed);
             _telemetryCalibrationApplier?.ApplyCalibration();
             _trackBuilder?.Build(_course);
@@ -95,6 +110,7 @@ namespace PhysicalAi.Planning
                 return;
 
             _progressMonitor?.UpdatePosition(_rigidbody.position);
+            ExtendStreamingCourseIfNeeded();
             if (_progressMonitor != null && _progressMonitor.IsOffCourse)
             {
                 EndEpisode(false, true);
@@ -172,6 +188,20 @@ namespace PhysicalAi.Planning
             return Physics.Raycast(_egoCamera.transform.position, _egoCamera.transform.forward, out var hit, _maximumVisibleDistance, ~0, QueryTriggerInteraction.Ignore)
                 ? hit.distance
                 : _maximumVisibleDistance;
+        }
+
+        void ExtendStreamingCourseIfNeeded()
+        {
+            if (_streamingCourse == null || _progressMonitor == null || _course == null ||
+                _progressMonitor.NearestWaypointIndex < _course.Centerline.Count - _streamingExtensionWaypointMargin)
+                return;
+            var firstNewIndex = _streamingCourse.AppendNextChunk();
+            _course = _streamingCourse.Course;
+            _trackBuilder?.Append(_course, firstNewIndex);
+            _trackBuilder?.DiscardBefore(_progressMonitor.NearestWaypointIndex, _streamingRetainedWaypointsBehind);
+            _progressMonitor.ExtendCourse(_course);
+            _headToHeadScenario?.SetCourse(_course);
+            CourseExtended?.Invoke(_course);
         }
 
         void OnCollisionEnter(Collision collision)

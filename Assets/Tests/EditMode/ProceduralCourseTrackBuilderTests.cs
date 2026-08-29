@@ -22,5 +22,21 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(builder.CenterlineRenderer.positionCount, Is.EqualTo(course.Centerline.Count));
             Object.DestroyImmediate(root);
         }
+
+        [Test]
+        public void DiscardBefore_RemovesPassedRoadAndBoundaryColliders()
+        {
+            var root = new GameObject("TrackTest");
+            var builder = root.AddComponent<ProceduralCourseTrackBuilder>();
+            var course = PhysicsConstrainedCourseGenerator.Generate(1, CourseGenerationSettings.Default, Vector3.zero, 0f);
+            builder.Build(course);
+            var originalSegments = builder.SegmentCount;
+
+            builder.DiscardBefore(30, 2);
+
+            Assert.That(builder.SegmentCount, Is.LessThan(originalSegments));
+            Assert.That(root.GetComponentsInChildren<CourseTrackSegment>().Length, Is.EqualTo(builder.SegmentCount * 3));
+            Object.DestroyImmediate(root);
+        }
     }
 }

@@ -95,6 +95,7 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_telemetryCalibrationApplier", telemetryCalibration);
             SetReference(orchestrator, "_egoCamera", camera);
             SetReference(orchestrator, "_cameraObservationSensor", cameraObservation);
+            SetBoolean(orchestrator, "_useStreamingTraining", true);
             SetReference(orchestrator, "_domainRandomizer", randomizer);
             SetReference(orchestrator, "_trackBuilder", track);
             SetReference(orchestrator, "_progressMonitor", progress);
@@ -153,6 +154,13 @@ namespace PhysicalAi.Editor
         {
             var serialized = new SerializedObject(target);
             serialized.FindProperty(propertyName).objectReferenceValue = value;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void SetBoolean(Object target, string propertyName, bool value)
+        {
+            var serialized = new SerializedObject(target);
+            serialized.FindProperty(propertyName).boolValue = value;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
