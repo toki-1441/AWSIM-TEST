@@ -34,6 +34,14 @@ namespace PhysicalAi.Planning
             if (_connectOnStart) Connect();
         }
 
+        void Update()
+        {
+            // A teleoperation session may temporarily own the command source. Reclaim it only
+            // after that source explicitly releases the slot, never while another source owns it.
+            if (_connected && _orchestrator != null && _orchestrator.CommandProvider == null)
+                _orchestrator.CommandProvider = RequestCommand;
+        }
+
         void OnEnable()
         {
             if (_orchestrator == null) return;
@@ -121,6 +129,8 @@ namespace PhysicalAi.Planning
         void Disconnect()
         {
             _connected = false;
+            if (_orchestrator != null && _orchestrator.CommandProvider == RequestCommand)
+                _orchestrator.CommandProvider = null;
             _reader?.Dispose(); _writer?.Dispose(); _client?.Dispose();
             _reader = null; _writer = null; _client = null;
         }
