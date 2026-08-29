@@ -1,0 +1,19 @@
+{
+    "name": "PhysicalAi.Planning",
+    "rootNamespace": "PhysicalAi.Planning",
+    "references": [
+        "PhysicalAi.Course",
+        "PhysicalAi.Racing",
+        "PhysicalAi.Safety",
+        "PhysicalAi.VehicleDynamics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
