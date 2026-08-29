@@ -83,6 +83,8 @@ python3 -m venv ../.physical-ai-venv
 ../.physical-ai-venv/bin/pip install -r scripts/requirements-vision-rl.txt
 ../.physical-ai-venv/bin/python scripts/train_visual_bc.py Build/camera-demos/manifest.jsonl --output Build/physical-ai-visual-bc.pt
 ../.physical-ai-venv/bin/python scripts/train_vision_rl.py --port 5015
+# Evaluate a saved visual checkpoint through the same Unity bridge:
+../.physical-ai-venv/bin/python scripts/serve_vision_policy.py Build/physical-ai-vision-reinforce.pt --port 5015
 
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
 

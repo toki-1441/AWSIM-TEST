@@ -7,7 +7,7 @@ the artifact that would be needed before claiming completion.
 | Goal | Current state | Evidence still required |
 | --- | --- | --- |
 | Physics feasibility | implemented and dynamics-tested | real steady-state braking/cornering telemetry and calibrated replay comparison |
-| Unknown-course generalisation | generated training roads and fixed holdout suite exist | a trained policy's training-vs-holdout completion/lap-time report |
+| Unknown-course generalisation | generated training roads, fixed holdout suite and visual-checkpoint inference server exist | a trained policy's training-vs-holdout completion/lap-time report |
 | Camera blind-corner safety | rendered camera, occluding hazards, camera export and visual REINFORCE baseline exist | camera-policy versus no-visibility baseline comparison with confidence bounds |
 | Head-to-head strategy | kinematic opponent, tactics and collision metric exist | measured overtakes, blocks and collision-free interaction episodes |
 | Sim RL phase | vector and camera-capable one-environment REINFORCE trainers exist | repeatable trained checkpoint plus learning curve and training-vs-holdout evaluation |
