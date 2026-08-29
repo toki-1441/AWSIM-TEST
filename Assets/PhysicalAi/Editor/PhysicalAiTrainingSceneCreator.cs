@@ -3,6 +3,7 @@
 
 using PhysicalAi.Planning;
 using PhysicalAi.Ros2;
+using PhysicalAi.Randomization;
 using PhysicalAi.VehicleDynamics;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -33,6 +34,7 @@ namespace PhysicalAi.Editor
             var dynamics = vehicle.AddComponent<CombinedSlipVehicle>();
             var controller = vehicle.AddComponent<PlanningLowLevelController>();
             var ros2Input = vehicle.AddComponent<CombinedSlipVehicleRos2Input>();
+            var randomizer = vehicle.AddComponent<DomainRandomizer>();
 
             var mounts = new Transform[4];
             for (var i = 0; i < mounts.Length; i++)
@@ -50,11 +52,13 @@ namespace PhysicalAi.Editor
             camera.transform.SetParent(vehicle.transform, false);
             camera.transform.localPosition = new Vector3(0f, 0.25f, 0.6f);
             camera.transform.localRotation = Quaternion.identity;
+            ConfigureSensorMounts(randomizer, dynamics, camera.transform);
 
             var orchestrator = vehicle.AddComponent<PhysicalAiEpisodeOrchestrator>();
             SetReference(orchestrator, "_vehicle", dynamics);
             SetReference(orchestrator, "_lowLevelController", controller);
             SetReference(orchestrator, "_egoCamera", camera);
+            SetReference(orchestrator, "_domainRandomizer", randomizer);
 
             System.IO.Directory.CreateDirectory("Assets/PhysicalAi/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -80,6 +84,16 @@ namespace PhysicalAi.Editor
         {
             var serialized = new SerializedObject(target);
             serialized.FindProperty(propertyName).objectReferenceValue = value;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void ConfigureSensorMounts(DomainRandomizer randomizer, CombinedSlipVehicle vehicle, Transform camera)
+        {
+            SetReference(randomizer, "_vehicle", vehicle);
+            var serialized = new SerializedObject(randomizer);
+            var mounts = serialized.FindProperty("_sensorMounts");
+            mounts.arraySize = 1;
+            mounts.GetArrayElementAtIndex(0).objectReferenceValue = camera;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
     }

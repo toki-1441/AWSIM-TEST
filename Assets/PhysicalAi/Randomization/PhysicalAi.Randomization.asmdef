@@ -1,0 +1,14 @@
+{
+    "name": "PhysicalAi.Randomization",
+    "rootNamespace": "PhysicalAi.Randomization",
+    "references": ["PhysicalAi.VehicleDynamics"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

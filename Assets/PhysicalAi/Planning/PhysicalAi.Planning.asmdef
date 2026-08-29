@@ -5,7 +5,8 @@
         "PhysicalAi.Course",
         "PhysicalAi.Racing",
         "PhysicalAi.Safety",
-        "PhysicalAi.VehicleDynamics"
+        "PhysicalAi.VehicleDynamics",
+        "PhysicalAi.Randomization"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -4,6 +4,7 @@
 using System;
 using PhysicalAi.Course;
 using PhysicalAi.Racing;
+using PhysicalAi.Randomization;
 using PhysicalAi.Safety;
 using PhysicalAi.VehicleDynamics;
 using UnityEngine;
@@ -22,6 +23,7 @@ namespace PhysicalAi.Planning
         [SerializeField] PlanningLowLevelController _lowLevelController;
         [SerializeField] PlanningDemonstrationRecorder _demonstrationRecorder;
         [SerializeField] BlindCornerHazardSpawner _hazardSpawner;
+        [SerializeField] DomainRandomizer _domainRandomizer;
         [SerializeField] Camera _egoCamera;
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
@@ -51,6 +53,7 @@ namespace PhysicalAi.Planning
         {
             _episodeSeed = seed;
             _course = PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, transform.position, transform.eulerAngles.y);
+            _domainRandomizer?.ApplyEpisodeSeed(seed);
             _hazardSpawner?.SpawnEpisodeHazard(seed);
             _demonstrationRecorder?.BeginEpisode(seed);
             CourseGenerated?.Invoke(_course);
