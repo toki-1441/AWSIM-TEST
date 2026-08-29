@@ -86,7 +86,9 @@ python3 -m venv ../.physical-ai-venv
 # Evaluate a saved visual checkpoint through the same Unity bridge:
 ../.physical-ai-venv/bin/python scripts/serve_vision_policy.py Build/physical-ai-vision-reinforce.pt --port 5015
 
-# In another terminal, run reproducible suite reports against that server.
+# In another terminal, run reproducible suite reports against that server. The
+# evaluation flag loads the Physical AI scene even though the ordinary player
+# continues to start at the AWSIM Autoware demo.
 # Reports are written to the player persistent-data PhysicalAi/ directory.
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation training
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout
