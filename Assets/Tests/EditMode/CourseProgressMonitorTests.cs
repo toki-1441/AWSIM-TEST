@@ -20,5 +20,21 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(monitor.IsOffCourse, Is.True);
             Object.DestroyImmediate(root);
         }
+
+        [Test]
+        public void UpdatePosition_TracksProgressAndRecognizesTheFinish()
+        {
+            var root = new GameObject("ProgressTest");
+            var monitor = root.AddComponent<CourseProgressMonitor>();
+            var course = PhysicsConstrainedCourseGenerator.Generate(1, CourseGenerationSettings.Default, Vector3.zero, 0f);
+            monitor.SetCourse(course);
+
+            monitor.UpdatePosition(course.Centerline[course.Centerline.Count - 1]);
+
+            Assert.That(monitor.ProgressMeters, Is.GreaterThan(0f));
+            Assert.That(monitor.DeltaProgressMeters, Is.EqualTo(monitor.ProgressMeters));
+            Assert.That(monitor.IsCompleted, Is.True);
+            Object.DestroyImmediate(root);
+        }
     }
 }

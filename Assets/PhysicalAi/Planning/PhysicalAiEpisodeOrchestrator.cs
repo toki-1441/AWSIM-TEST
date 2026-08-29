@@ -41,6 +41,7 @@ namespace PhysicalAi.Planning
 
         public event Action<GeneratedCourse> CourseGenerated;
         public event Action<PlanningObservation> ObservationReady;
+        public event Action<bool, bool, bool> EpisodeFinished;
         public Func<PlanningObservation, PlanningCommand> CommandProvider;
         public GeneratedCourse Course => _course;
 
@@ -78,6 +79,11 @@ namespace PhysicalAi.Planning
                 EndEpisode(false, true);
                 return;
             }
+            if (_progressMonitor != null && _progressMonitor.IsCompleted)
+            {
+                EndEpisode(true, false, false);
+                return;
+            }
 
             var waypointIndex = FindNearestWaypoint(_rigidbody.position);
             var waypoints = RelativeCourseObservation.Encode(_course, _rigidbody.position, _rigidbody.rotation, waypointIndex, _observationWaypointCount);
@@ -97,10 +103,17 @@ namespace PhysicalAi.Planning
             var target = waypoints.Length == 0 ? default : waypoints[Mathf.Min(1, waypoints.Length - 1)];
             var headingError = waypoints.Length == 0 ? 0f : Mathf.Atan2(target.LocalPosition.x, Mathf.Max(0.01f, target.LocalPosition.z));
             _lowLevelController.Apply(command, _rigidbody.linearVelocity.magnitude, headingError);
-            _demonstrationRecorder?.Record(observation, command, 0f);
+            var safeSpeed = waypoints.Length == 0 ? observation.Features[1] : waypoints[0].MaximumSafeSpeed;
+            var progressMeters = _progressMonitor == null ? 0f : _progressMonitor.DeltaProgressMeters;
+            _demonstrationRecorder?.Record(observation, command, PlanningReward.Calculate(progressMeters, false, false, _rigidbody.linearVelocity.magnitude, safeSpeed));
         }
 
         public void EndEpisode(bool collision, bool offCourse)
+        {
+            EndEpisode(false, collision, offCourse);
+        }
+
+        void EndEpisode(bool completed, bool collision, bool offCourse)
         {
             if (_episodeEnded)
                 return;
@@ -110,8 +123,8 @@ namespace PhysicalAi.Planning
                 ? 0f
                 : _course.MaximumSafeSpeed[Mathf.Clamp(FindNearestWaypoint(_rigidbody.position), 0, _course.MaximumSafeSpeed.Count - 1)];
             var reward = PlanningReward.Calculate(0f, collision, offCourse, speed, safeSpeed);
-            _demonstrationRecorder?.Record(new PlanningObservation(Array.Empty<float>()), default, reward);
-            _demonstrationRecorder?.EndEpisode();
+            _demonstrationRecorder?.EndEpisode(new PlanningObservation(Array.Empty<float>()), default, reward);
+            EpisodeFinished?.Invoke(completed, collision, offCourse);
         }
 
         int FindNearestWaypoint(Vector3 position)

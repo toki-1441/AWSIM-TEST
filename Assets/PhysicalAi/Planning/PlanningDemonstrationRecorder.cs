@@ -70,6 +70,24 @@ namespace PhysicalAi.Planning
             _writer = null;
         }
 
+        public void EndEpisode(PlanningObservation observation, PlanningCommand command, float terminalReward)
+        {
+            if (_writer == null)
+                return;
+            WriteFrame(new PlanningDemonstrationFrame
+            {
+                EpisodeId = _episodeId,
+                Step = _step,
+                SimulationTime = Time.time,
+                Observation = observation.Features,
+                Command = command,
+                Reward = terminalReward,
+                Terminal = true
+            });
+            _writer.Dispose();
+            _writer = null;
+        }
+
         void OnDisable() => EndEpisode(false);
 
         void WriteFrame(PlanningDemonstrationFrame frame)
