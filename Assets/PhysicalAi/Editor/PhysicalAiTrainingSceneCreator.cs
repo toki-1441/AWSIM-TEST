@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using PhysicalAi.Planning;
+using PhysicalAi.Ros2;
 using PhysicalAi.VehicleDynamics;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -31,6 +32,7 @@ namespace PhysicalAi.Editor
             rigidbody.mass = 30f;
             var dynamics = vehicle.AddComponent<CombinedSlipVehicle>();
             var controller = vehicle.AddComponent<PlanningLowLevelController>();
+            var ros2Input = vehicle.AddComponent<CombinedSlipVehicleRos2Input>();
 
             var mounts = new Transform[4];
             for (var i = 0; i < mounts.Length; i++)
@@ -42,6 +44,7 @@ namespace PhysicalAi.Editor
             }
             ConfigureWheels(dynamics, mounts);
             SetReference(controller, "_vehicle", dynamics);
+            SetReference(ros2Input, "_vehicle", dynamics);
 
             var camera = new GameObject("EgoCamera").AddComponent<Camera>();
             camera.transform.SetParent(vehicle.transform, false);
