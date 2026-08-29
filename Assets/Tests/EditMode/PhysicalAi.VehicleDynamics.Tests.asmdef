@@ -1,0 +1,21 @@
+{
+    "name": "PhysicalAi.VehicleDynamics.Tests",
+    "rootNamespace": "PhysicalAi.Tests.EditMode",
+    "references": [
+        "PhysicalAi.VehicleDynamics"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}
