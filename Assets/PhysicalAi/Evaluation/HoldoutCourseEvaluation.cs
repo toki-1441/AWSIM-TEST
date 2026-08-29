@@ -23,6 +23,7 @@ namespace PhysicalAi.Evaluation
         public int OffCourseCount;
         public int BlindCornerHazardCollisionCount;
         public int OpponentCollisionCount;
+        public int TimeoutCount;
     }
 
     public readonly struct HoldoutEvaluationReport
@@ -34,8 +35,9 @@ namespace PhysicalAi.Evaluation
         public readonly float OffCourseRate;
         public readonly float BlindCornerHazardCollisionRate;
         public readonly float OpponentCollisionRate;
+        public readonly float TimeoutRate;
 
-        public HoldoutEvaluationReport(int episodeCount, float completionRate, float meanCompletedLapTimeSeconds, float collisionRate, float offCourseRate, float blindCornerHazardCollisionRate = 0f, float opponentCollisionRate = 0f)
+        public HoldoutEvaluationReport(int episodeCount, float completionRate, float meanCompletedLapTimeSeconds, float collisionRate, float offCourseRate, float blindCornerHazardCollisionRate = 0f, float opponentCollisionRate = 0f, float timeoutRate = 0f)
         {
             EpisodeCount = episodeCount;
             CompletionRate = completionRate;
@@ -44,6 +46,7 @@ namespace PhysicalAi.Evaluation
             OffCourseRate = offCourseRate;
             BlindCornerHazardCollisionRate = blindCornerHazardCollisionRate;
             OpponentCollisionRate = opponentCollisionRate;
+            TimeoutRate = timeoutRate;
         }
     }
 
@@ -62,7 +65,8 @@ namespace PhysicalAi.Evaluation
                 (float)results.Count(result => result.CollisionCount > 0) / results.Count,
                 (float)results.Count(result => result.OffCourseCount > 0) / results.Count,
                 (float)results.Count(result => result.BlindCornerHazardCollisionCount > 0) / results.Count,
-                (float)results.Count(result => result.OpponentCollisionCount > 0) / results.Count);
+                (float)results.Count(result => result.OpponentCollisionCount > 0) / results.Count,
+                (float)results.Count(result => result.TimeoutCount > 0) / results.Count);
         }
 
         public static bool IsHoldoutSeed(int seed) => Array.IndexOf(HoldoutCourseSuite.Seeds, seed) >= 0;

@@ -12,9 +12,12 @@ namespace PhysicalAi.Evaluation
     {
         [SerializeField] PhysicalAiEpisodeOrchestrator _orchestrator;
         [SerializeField] bool _runOnStart;
+        [SerializeField, Min(1f)] float _maximumEpisodeSeconds = 120f;
 
         HoldoutEvaluationSession _session;
         int _nextSeedIndex;
+        float _episodeStartTime;
+        bool _timedOut;
         public event Action<HoldoutEvaluationReport> EvaluationCompleted;
 
         void OnEnable()
@@ -35,12 +38,22 @@ namespace PhysicalAi.Evaluation
                 _orchestrator.EpisodeFinished -= OnEpisodeFinished;
         }
 
+        void Update()
+        {
+            if (_session != null && _session.HasActiveEpisode && !_timedOut && Time.time - _episodeStartTime >= _maximumEpisodeSeconds)
+            {
+                _timedOut = true;
+                _orchestrator.EndEpisode(false, false);
+            }
+        }
+
         public void RunSuite()
         {
             if (_orchestrator == null)
                 throw new InvalidOperationException("Assign a PhysicalAiEpisodeOrchestrator before running evaluation.");
             _session = new HoldoutEvaluationSession();
             _nextSeedIndex = 0;
+            _timedOut = false;
             StartNextEpisode();
         }
 
@@ -52,7 +65,9 @@ namespace PhysicalAi.Evaluation
                 return;
             }
             var seed = HoldoutCourseSuite.Seeds[_nextSeedIndex++];
-            _session.BeginEpisode(seed, Time.time);
+            _episodeStartTime = Time.time;
+            _timedOut = false;
+            _session.BeginEpisode(seed, _episodeStartTime);
             _orchestrator.ResetHoldoutEpisode(seed);
         }
 
@@ -61,7 +76,7 @@ namespace PhysicalAi.Evaluation
             if (_session == null || !_session.HasActiveEpisode)
                 return;
             _session.CompleteEpisode(completed, collision, offCourse, Time.time,
-                _orchestrator.LastCollisionWasBlindCornerHazard, _orchestrator.LastCollisionWasOpponent);
+                _orchestrator.LastCollisionWasBlindCornerHazard, _orchestrator.LastCollisionWasOpponent, _timedOut);
             StartNextEpisode();
         }
     }

@@ -23,6 +23,7 @@ namespace PhysicalAi.Evaluation
             public float offCourseRate;
             public float blindCornerHazardCollisionRate;
             public float opponentCollisionRate;
+            public float timeoutRate;
         }
 
         void OnEnable()
@@ -54,7 +55,8 @@ namespace PhysicalAi.Evaluation
                 collisionRate = report.CollisionRate,
                 offCourseRate = report.OffCourseRate,
                 blindCornerHazardCollisionRate = report.BlindCornerHazardCollisionRate,
-                opponentCollisionRate = report.OpponentCollisionRate
+                opponentCollisionRate = report.OpponentCollisionRate,
+                timeoutRate = report.TimeoutRate
             }, true);
         }
     }
