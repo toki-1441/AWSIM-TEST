@@ -51,6 +51,7 @@ namespace PhysicalAi.Editor
             var ros2Input = vehicle.AddComponent<CombinedSlipVehicleRos2Input>();
             var randomizer = vehicle.AddComponent<DomainRandomizer>();
             var telemetryCalibration = vehicle.AddComponent<TelemetryCalibrationApplier>();
+            var calibrationReportWriter = vehicle.AddComponent<TelemetryCalibrationReportWriter>();
             var sensorRig = vehicle.AddComponent<SensorRig>();
             var headToHead = vehicle.AddComponent<HeadToHeadScenario>();
             var hazardSpawner = vehicle.AddComponent<BlindCornerHazardSpawner>();
@@ -114,6 +115,7 @@ namespace PhysicalAi.Editor
             SetReference(hazardSpawner, "_egoCamera", camera);
             SetReference(telemetryCalibration, "_vehicle", dynamics);
             SetReference(telemetryCalibration, "_domainRandomizer", randomizer);
+            SetReference(calibrationReportWriter, "_applier", telemetryCalibration);
 
             System.IO.Directory.CreateDirectory("Assets/PhysicalAi/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);

@@ -23,6 +23,7 @@ namespace PhysicalAi.Calibration
         [SerializeField, Min(0.01f)] float _uncalibratedDomainMeanFriction = 0.9f;
 
         public FrictionCalibrationResult LastResult { get; private set; }
+        public event Action<FrictionCalibrationResult> CalibrationApplied;
 
         public bool ApplyCalibration()
         {
@@ -34,6 +35,7 @@ namespace PhysicalAi.Calibration
             LastResult = TelemetryFrictionCalibrator.Estimate(data.Samples);
             TelemetryFrictionCalibrator.Apply(_vehicle, LastResult);
             _domainRandomizer?.SetFrictionScale(LastResult.FrictionCoefficient / _uncalibratedDomainMeanFriction);
+            CalibrationApplied?.Invoke(LastResult);
             return true;
         }
     }

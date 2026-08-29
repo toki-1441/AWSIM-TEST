@@ -101,7 +101,7 @@ asserts the wiring.
 | ROS2 control input | yes | mapping | starts an idempotent AWSIM ROS2 node and subscribes; it applies only after a command arrives |
 | Behaviour cloning policy and trainer | yes | yes | **no model asset assigned** |
 | Demonstration recorder | yes | yes | scene-wired; recording begins only when F8 enables keyboard teleoperation |
-| Telemetry friction calibration | yes | yes | CSV conversion plus scene applier are ready; awaiting a real-run asset |
+| Telemetry friction calibration | yes | yes | CSV conversion, scene applier and persistent fit-quality report are ready; awaiting a real-run asset |
 | Holdout evaluation | yes | evaluator | scene-wired JSON report sink records completion, lap-time and safety metrics |
 | Sensor rig, planar LiDAR, TF | yes | yes | mounted, not read by any policy |
 | Rendered camera observation | yes | EditMode + PlayMode | mounted; emitted to external bridges without changing vector-policy compatibility |

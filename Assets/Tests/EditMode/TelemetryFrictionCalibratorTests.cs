@@ -36,5 +36,13 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(restored.Samples, Has.Length.EqualTo(1));
             Assert.That(restored.Samples[0].Speed, Is.EqualTo(4f));
         }
+
+        [Test]
+        public void CalibrationReport_ContainsFitQualityMetrics()
+        {
+            var json = TelemetryCalibrationReportWriter.Serialize(new FrictionCalibrationResult(0.82f, 12, 0.14f));
+            StringAssert.Contains("\"frictionCoefficient\":", json);
+            StringAssert.Contains("\"sampleCount\": 12", json);
+        }
     }
 }
