@@ -81,7 +81,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (43 cases) and 2 PlayMode cases are passing.
+17 EditMode test files (44 cases) and 2 PlayMode cases are passing.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
@@ -116,11 +116,11 @@ Measured against the [goals document](physical-ai-goals.md):
 | System identification from real telemetry | partly: friction only |
 | Shared ROS2 low-level node | partly: the component exists but is never initialised |
 | Offline BC from in-sim teleoperation | partly: recorder, trainer and policy exist, but the recorder is not in the scene and there is no teleoperation input |
-| Zero-shot holdout evaluation | partly: fixed seeds now generate separate closed circuits, but the report has no subscriber |
+| Zero-shot holdout evaluation | partly: fixed closed circuits and a persistent JSON report sink exist; surveyed geometry, checkpoints and target-metric subscribers remain |
 | **Camera field of view and occlusion** | partly: a rendered image channel is emitted for external policies; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | partly: deterministic chunks append ahead, rear colliders are discarded, and world state is shifted; bounded logical history remains |
 | Sim RL via a Python interface | **not started**: no ML-Agents package in the manifest |
-| Definition-of-done metrics | **not measurable**: no report sink, and no metric for blind-corner safety or head-to-head outcomes |
+| Definition-of-done metrics | partly: completion, lap-time, collision and departure rates are persisted after a holdout suite; blind-corner safety and head-to-head outcomes remain unmeasured |
 
 The two structural absences are the camera perception path and the streaming map. Everything
 listed as "partly" is wiring rather than design.

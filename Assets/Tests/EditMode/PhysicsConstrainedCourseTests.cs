@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using PhysicalAi.Course;
+using PhysicalAi.Evaluation;
 using UnityEngine;
 
 namespace PhysicalAi.Tests.EditMode
@@ -85,6 +86,17 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(course.Centerline[0], Is.EqualTo(offset));
             for (var index = 0; index < before.Length; index++)
                 Assert.That(Vector3.Distance(before[index].LocalPosition, after[index].LocalPosition), Is.LessThan(0.0001f));
+        }
+
+        [Test]
+        public void HoldoutReport_UsesMachineReadableFiniteValues()
+        {
+            var report = new HoldoutEvaluationReport(2, 0f, float.PositiveInfinity, 0.5f, 1f);
+            var json = HoldoutEvaluationReportWriter.Serialize(report);
+
+            StringAssert.Contains("\"episodeCount\": 2", json);
+            StringAssert.Contains("\"meanCompletedLapTimeSeconds\": -1.0", json);
+            StringAssert.DoesNotContain("Infinity", json);
         }
     }
 }

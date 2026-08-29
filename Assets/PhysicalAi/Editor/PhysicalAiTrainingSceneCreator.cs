@@ -86,6 +86,7 @@ namespace PhysicalAi.Editor
 
             var orchestrator = vehicle.AddComponent<PhysicalAiEpisodeOrchestrator>();
             var holdoutEvaluator = vehicle.AddComponent<HoldoutEvaluationRunner>();
+            var holdoutReportWriter = vehicle.AddComponent<HoldoutEvaluationReportWriter>();
             var track = new GameObject("ProceduralTrack").AddComponent<ProceduralCourseTrackBuilder>();
             var progress = vehicle.AddComponent<CourseProgressMonitor>();
             SetReference(orchestrator, "_vehicle", dynamics);
@@ -101,6 +102,7 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_progressMonitor", progress);
             SetReference(orchestrator, "_headToHeadScenario", headToHead);
             SetReference(holdoutEvaluator, "_orchestrator", orchestrator);
+            SetReference(holdoutReportWriter, "_runner", holdoutEvaluator);
             ConfigureHeadToHead(headToHead, rigidbody, CreateOpponentVehicle(specification));
             SetReference(hazardSpawner, "_egoCamera", camera);
             SetReference(telemetryCalibration, "_vehicle", dynamics);
