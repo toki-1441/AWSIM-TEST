@@ -81,7 +81,7 @@ asserts the wiring.
 
 ## Status
 
-16 EditMode test files, 35 test cases, all passing.
+17 EditMode test files (39 cases) and 2 PlayMode cases are passing.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
@@ -100,6 +100,7 @@ asserts the wiring.
 | Telemetry friction calibration | yes | yes | **no telemetry asset assigned** |
 | Holdout evaluation | yes | evaluator | **report has no subscriber** |
 | Sensor rig, planar LiDAR, TF | yes | yes | mounted, not read by any policy |
+| Rendered camera observation | yes | EditMode + PlayMode | mounted; emitted to external bridges without changing vector-policy compatibility |
 
 ## Against the goals
 
@@ -115,8 +116,8 @@ Measured against the [goals document](physical-ai-goals.md):
 | System identification from real telemetry | partly: friction only |
 | Shared ROS2 low-level node | partly: the component exists but is never initialised |
 | Offline BC from in-sim teleoperation | partly: recorder, trainer and policy exist, but the recorder is not in the scene and there is no teleoperation input |
-| Zero-shot holdout evaluation | partly: fixed seeds exist, but they generate the training archetype and the report has no subscriber |
-| **Camera field of view and occlusion** | **not met**: visible distance is a single forward raycast; no rendered camera enters the observation |
+| Zero-shot holdout evaluation | partly: fixed seeds now generate separate closed circuits, but the report has no subscriber |
+| **Camera field of view and occlusion** | partly: a rendered image channel is emitted for external policies; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | **not implemented** |
 | Sim RL via a Python interface | **not started**: no ML-Agents package in the manifest |
 | Definition-of-done metrics | **not measurable**: no report sink, and no metric for blind-corner safety or head-to-head outcomes |
@@ -129,15 +130,15 @@ listed as "partly" is wiring rather than design.
 The goals document is explicit that the vehicle physics layer precedes everything, because
 learning signal accumulated over inconsistent physics is silently wrong.
 
-1. **Verify the vehicle physics.** The specification and tire model are in place and unit-tested
-   at the force level. What is missing is a dynamics-level check: that the assembled vehicle
-   reaches — and does not exceed — the analytic friction-circle limit in steady-state cornering
-   and in braking.
+1. **Vehicle physics verification.** The assembled TT-02 now has a PlayMode combined-slip
+   friction-circle bound test. Steady-state cornering and braking calibration against telemetry
+   remain to be added once those samples are available.
 2. **Endless streaming map and floating origin.** Resumable chunk generation, incremental build
    and discard, and the origin shift. This changes what an episode is, so it should land before
    any data is recorded.
-3. **Camera-based observation.** The perception goal the project is named for, and the
-   precondition for blind-corner behaviour to be learned rather than hand-coded.
+3. **Camera-based policy training.** The rendered image channel exists; connect it to the
+   external learning bridge so blind-corner behaviour is learned from pixels rather than only
+   the conservative visibility bound.
 4. **Teleoperation input and recorder wiring**, which together give the BC pipeline a data source.
 5. **Python learning interface** for the sim-RL phase.
 6. **Closed-loop holdout courses, checkpoints and a report sink**, which is what makes the

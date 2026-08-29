@@ -76,6 +76,7 @@ namespace PhysicalAi.Editor
             // below the 0.08 m course wall top so it can observe the boundaries.
             var camera = CreateSensorMount<Camera>(vehicle.transform, "EgoCamera", SensorModality.Camera, "camera_front",
                 new Vector3(0f, specification.BodyHeight * 0.7f, specification.BodyLength * 0.3f));
+            var cameraObservation = camera.gameObject.AddComponent<CameraObservationSensor>();
             var lidar = CreateSensorMount<PlanarLidarSensor>(vehicle.transform, "EgoLidar2D", SensorModality.PlanarLidar, "lidar_2d",
                 new Vector3(0f, 0.06f - specification.BodyCenterHeight, specification.BodyLength * 0.12f));
             var tf = CreateSensorMount<TransformFrameSensor>(vehicle.transform, "TfBaseLink", SensorModality.TransformFrame, "base_link", Vector3.zero);
@@ -93,6 +94,7 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_hazardSpawner", hazardSpawner);
             SetReference(orchestrator, "_telemetryCalibrationApplier", telemetryCalibration);
             SetReference(orchestrator, "_egoCamera", camera);
+            SetReference(orchestrator, "_cameraObservationSensor", cameraObservation);
             SetReference(orchestrator, "_domainRandomizer", randomizer);
             SetReference(orchestrator, "_trackBuilder", track);
             SetReference(orchestrator, "_progressMonitor", progress);

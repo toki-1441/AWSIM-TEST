@@ -38,6 +38,7 @@ namespace PhysicalAi.Tests.EditMode
             var sensorRig = vehicle.GetComponent<SensorRig>();
             Assert.That(sensorRig, Is.Not.Null);
             Assert.That(sensorRig.PrimaryCamera, Is.Not.Null);
+            Assert.That(sensorRig.PrimaryCamera.GetComponent<CameraObservationSensor>(), Is.Not.Null);
             Assert.That(sensorRig.FindMount(SensorModality.Camera), Is.Not.Null);
             Assert.That(sensorRig.FindMount(SensorModality.PlanarLidar), Is.Not.Null);
             Assert.That(sensorRig.FindMount(SensorModality.TransformFrame), Is.Not.Null);

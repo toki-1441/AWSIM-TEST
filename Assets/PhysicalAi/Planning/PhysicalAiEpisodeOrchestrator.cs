@@ -8,6 +8,7 @@ using PhysicalAi.Racing;
 using PhysicalAi.Randomization;
 using PhysicalAi.Safety;
 using PhysicalAi.VehicleDynamics;
+using PhysicalAi.Sensors;
 using UnityEngine;
 
 namespace PhysicalAi.Planning
@@ -31,6 +32,7 @@ namespace PhysicalAi.Planning
         [SerializeField] CourseProgressMonitor _progressMonitor;
         [SerializeField] HeadToHeadScenario _headToHeadScenario;
         [SerializeField] Camera _egoCamera;
+        [SerializeField] CameraObservationSensor _cameraObservationSensor;
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
         [SerializeField, Min(1)] int _observationWaypointCount = 6;
@@ -45,6 +47,7 @@ namespace PhysicalAi.Planning
 
         public event Action<GeneratedCourse> CourseGenerated;
         public event Action<PlanningObservation> ObservationReady;
+        public event Action<CameraObservationFrame> CameraObservationReady;
         public event Action<bool, bool, bool> EpisodeFinished;
         public Func<PlanningObservation, PlanningCommand> CommandProvider;
         public GeneratedCourse Course => _course;
@@ -115,6 +118,8 @@ namespace PhysicalAi.Planning
                 _reactionTime,
                 _maximumDeceleration);
             ObservationReady?.Invoke(observation);
+            if (_cameraObservationSensor != null && _cameraObservationSensor.CaptureIfDue())
+                CameraObservationReady?.Invoke(_cameraObservationSensor.CurrentFrame());
 
             var command = ChooseCommand(observation, waypoints);
             var target = waypoints.Length == 0 ? default : waypoints[Mathf.Min(1, waypoints.Length - 1)];

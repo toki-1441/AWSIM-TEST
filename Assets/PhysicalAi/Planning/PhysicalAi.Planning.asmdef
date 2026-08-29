@@ -7,7 +7,8 @@
         "PhysicalAi.Safety",
         "PhysicalAi.VehicleDynamics",
         "PhysicalAi.Randomization",
-        "PhysicalAi.Calibration"
+        "PhysicalAi.Calibration",
+        "PhysicalAi.Sensors"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

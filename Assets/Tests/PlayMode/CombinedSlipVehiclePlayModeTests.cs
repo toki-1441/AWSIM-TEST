@@ -2,8 +2,10 @@ using System.Reflection;
 using System.Collections;
 using NUnit.Framework;
 using PhysicalAi.VehicleDynamics;
+using PhysicalAi.Sensors;
 using UnityEngine;
 using UnityEngine.TestTools;
+using UnityEngine.Rendering;
 
 namespace PhysicalAi.Tests.PlayMode
 {
@@ -44,6 +46,32 @@ namespace PhysicalAi.Tests.PlayMode
             Assert.That(float.IsNaN(body.linearVelocity.sqrMagnitude), Is.False);
             Object.Destroy(root);
             Object.Destroy(ground);
+        }
+
+        [UnityTest]
+        public IEnumerator CameraObservation_CapturesRenderedFrame()
+        {
+            var root = new GameObject("CameraObservationTest");
+            root.transform.position = new Vector3(0f, 0f, -2f);
+            root.AddComponent<Camera>();
+            var sensor = root.AddComponent<CameraObservationSensor>();
+            var visible = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            visible.transform.position = Vector3.forward * 2f;
+
+            yield return null;
+            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
+            {
+                Assert.That(sensor.Capture(), Is.False);
+                Assert.That(sensor.FrameIndex, Is.Zero);
+            }
+            else
+            {
+                Assert.That(sensor.Capture(), Is.True);
+                Assert.That(sensor.CurrentFrame().Image.IsCreated(), Is.True);
+                Assert.That(sensor.FrameIndex, Is.EqualTo(1));
+            }
+            Object.Destroy(root);
+            Object.Destroy(visible);
         }
 
         static void ConfigureVehicle(CombinedSlipVehicle vehicle, Transform root, VehicleSpecification specification)
