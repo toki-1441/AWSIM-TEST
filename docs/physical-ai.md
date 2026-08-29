@@ -87,7 +87,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (46 cases) and 2 PlayMode cases are passing.
+17 EditMode test files (47 cases) and 2 PlayMode cases are passing.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
@@ -154,3 +154,4 @@ learning signal accumulated over inconsistent physics is silently wrong.
 - [Vehicle model](physical-ai-vehicle-model.md) — MAGP regulations, the adopted TT-02
   parameter set, and the provenance of every value.
 - [Offline behaviour cloning](physical-ai-bc.md) — recording format and the training script.
+- [Readiness audit](physical-ai-readiness.md) — required evidence before the simulator goal can be claimed complete.
