@@ -4,6 +4,7 @@
 using PhysicalAi.Planning;
 using PhysicalAi.Ros2;
 using PhysicalAi.Randomization;
+using PhysicalAi.Course;
 using PhysicalAi.VehicleDynamics;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -27,7 +28,7 @@ namespace PhysicalAi.Editor
 
             var vehicle = GameObject.CreatePrimitive(PrimitiveType.Cube);
             vehicle.name = "PhysicalAiVehicle";
-            vehicle.transform.position = new Vector3(0f, 0.6f, 0f);
+            vehicle.transform.position = new Vector3(0f, 0.35f, 0f);
             vehicle.transform.localScale = new Vector3(1.2f, 0.4f, 2f);
             var rigidbody = vehicle.AddComponent<Rigidbody>();
             rigidbody.mass = 30f;
@@ -55,10 +56,12 @@ namespace PhysicalAi.Editor
             ConfigureSensorMounts(randomizer, dynamics, camera.transform);
 
             var orchestrator = vehicle.AddComponent<PhysicalAiEpisodeOrchestrator>();
+            var track = new GameObject("ProceduralTrack").AddComponent<ProceduralCourseTrackBuilder>();
             SetReference(orchestrator, "_vehicle", dynamics);
             SetReference(orchestrator, "_lowLevelController", controller);
             SetReference(orchestrator, "_egoCamera", camera);
             SetReference(orchestrator, "_domainRandomizer", randomizer);
+            SetReference(orchestrator, "_trackBuilder", track);
 
             System.IO.Directory.CreateDirectory("Assets/PhysicalAi/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);

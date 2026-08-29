@@ -24,6 +24,7 @@ namespace PhysicalAi.Planning
         [SerializeField] PlanningDemonstrationRecorder _demonstrationRecorder;
         [SerializeField] BlindCornerHazardSpawner _hazardSpawner;
         [SerializeField] DomainRandomizer _domainRandomizer;
+        [SerializeField] ProceduralCourseTrackBuilder _trackBuilder;
         [SerializeField] Camera _egoCamera;
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
@@ -52,8 +53,10 @@ namespace PhysicalAi.Planning
         public void ResetEpisode(int seed)
         {
             _episodeSeed = seed;
-            _course = PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, transform.position, transform.eulerAngles.y);
+            var courseOrigin = new Vector3(transform.position.x, 0f, transform.position.z);
+            _course = PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
             _domainRandomizer?.ApplyEpisodeSeed(seed);
+            _trackBuilder?.Build(_course);
             _hazardSpawner?.SpawnEpisodeHazard(seed);
             _demonstrationRecorder?.BeginEpisode(seed);
             CourseGenerated?.Invoke(_course);
