@@ -30,7 +30,14 @@ namespace PhysicalAi.Evaluation
 
         void Start()
         {
-            if (_runOnStart)
+            // Player builds can run a reproducible suite without editing the scene:
+            // -physicalAiEvaluation holdout | training.
+            var evaluation = GetCommandLineArg("-physicalAiEvaluation");
+            if (evaluation == "holdout")
+                RunSuite();
+            else if (evaluation == "training")
+                RunTrainingSuite();
+            else if (_runOnStart)
                 RunSuite();
         }
 
@@ -93,6 +100,14 @@ namespace PhysicalAi.Evaluation
             _session.CompleteEpisode(completed, collision, offCourse, Time.time,
                 _orchestrator.LastCollisionWasBlindCornerHazard, _orchestrator.LastCollisionWasOpponent, _timedOut);
             StartNextEpisode();
+        }
+
+        static string GetCommandLineArg(string parameter)
+        {
+            var arguments = Environment.GetCommandLineArgs();
+            for (var index = 0; index + 1 < arguments.Length; index++)
+                if (arguments[index] == parameter) return arguments[index + 1];
+            return null;
         }
     }
 }

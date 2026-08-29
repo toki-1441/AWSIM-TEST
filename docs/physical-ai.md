@@ -86,6 +86,11 @@ python3 -m venv ../.physical-ai-venv
 # Evaluate a saved visual checkpoint through the same Unity bridge:
 ../.physical-ai-venv/bin/python scripts/serve_vision_policy.py Build/physical-ai-vision-reinforce.pt --port 5015
 
+# In another terminal, run reproducible suite reports against that server.
+# Reports are written to the player persistent-data PhysicalAi/ directory.
+Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation training
+Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout
+
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
 
 python3 scripts/evaluate_goal_metrics.py --training train.json --holdout holdout.json --blind-baseline blind.json --race-baseline race.json

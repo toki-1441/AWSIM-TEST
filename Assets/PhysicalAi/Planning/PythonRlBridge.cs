@@ -31,7 +31,15 @@ namespace PhysicalAi.Planning
 
         void Start()
         {
-            if (_connectOnStart) Connect();
+            // Keep the authored scene disconnected by default.  A player build can opt in
+            // without changing scene YAML: -physicalAiRlPort 5015.
+            var port = GetCommandLineArg("-physicalAiRlPort");
+            if (int.TryParse(port, out var requestedPort) && requestedPort > 0)
+            {
+                _port = requestedPort;
+                Connect();
+            }
+            else if (_connectOnStart) Connect();
         }
 
         void Update()
@@ -142,6 +150,14 @@ namespace PhysicalAi.Planning
         void OnDestroy()
         {
             if (_cameraReadback != null) Destroy(_cameraReadback);
+        }
+
+        static string GetCommandLineArg(string parameter)
+        {
+            var arguments = Environment.GetCommandLineArgs();
+            for (var index = 0; index + 1 < arguments.Length; index++)
+                if (arguments[index] == parameter) return arguments[index + 1];
+            return null;
         }
     }
 }
