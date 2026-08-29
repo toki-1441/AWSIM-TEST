@@ -26,6 +26,7 @@ namespace PhysicalAi.Planning
         [SerializeField] DomainRandomizer _domainRandomizer;
         [SerializeField] ProceduralCourseTrackBuilder _trackBuilder;
         [SerializeField] CourseProgressMonitor _progressMonitor;
+        [SerializeField] HeadToHeadScenario _headToHeadScenario;
         [SerializeField] Camera _egoCamera;
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
@@ -62,6 +63,7 @@ namespace PhysicalAi.Planning
             _domainRandomizer?.ApplyEpisodeSeed(seed);
             _trackBuilder?.Build(_course);
             _progressMonitor?.SetCourse(_course);
+            _headToHeadScenario?.SetCourse(_course);
             _episodeEnded = false;
             _hazardSpawner?.SpawnEpisodeHazard(seed);
             _demonstrationRecorder?.BeginEpisode(seed);
@@ -88,9 +90,10 @@ namespace PhysicalAi.Planning
             var waypointIndex = FindNearestWaypoint(_rigidbody.position);
             var waypoints = RelativeCourseObservation.Encode(_course, _rigidbody.position, _rigidbody.rotation, waypointIndex, _observationWaypointCount);
             var visibleDistance = MeasureVisibleDistance();
+            var opponent = _headToHeadScenario == null ? default : _headToHeadScenario.ObserveClosestOpponent();
             var observation = PlanningObservationEncoder.Encode(
                 waypoints,
-                default,
+                opponent,
                 _rigidbody.linearVelocity.magnitude,
                 visibleDistance,
                 _reactionTime,

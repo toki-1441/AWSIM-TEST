@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using PhysicalAi.Racing;
+using UnityEngine;
 
 namespace PhysicalAi.Tests.EditMode
 {
@@ -30,6 +31,18 @@ namespace PhysicalAi.Tests.EditMode
             var opponent = new OpponentKinematics { LongitudinalDistance = -3f, RelativeLateralSpeed = -1f };
 
             Assert.That(RaceTactics.PredictIntent(opponent), Is.EqualTo(OpponentIntent.OvertakingLeft));
+        }
+
+        [Test]
+        public void ToEgoLocal_UsesRelativePositionAndClosingSpeed()
+        {
+            var ego = new GameObject("ego");
+            var observation = HeadToHeadScenario.ToEgoLocal(ego.transform, new Vector3(0f, 0f, 8f), new Vector3(1.5f, 0f, 12f), new Vector3(0f, 0f, 5f));
+
+            Assert.That(observation.LongitudinalDistance, Is.EqualTo(12f));
+            Assert.That(observation.LateralOffset, Is.EqualTo(1.5f));
+            Assert.That(observation.RelativeLongitudinalSpeed, Is.EqualTo(3f));
+            Object.DestroyImmediate(ego);
         }
 
         static RaceTacticInput DefaultInput() => new RaceTacticInput

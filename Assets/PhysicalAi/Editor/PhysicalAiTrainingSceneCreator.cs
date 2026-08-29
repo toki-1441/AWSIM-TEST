@@ -7,6 +7,7 @@ using PhysicalAi.Randomization;
 using PhysicalAi.Sensors;
 using PhysicalAi.Course;
 using PhysicalAi.Evaluation;
+using PhysicalAi.Racing;
 using PhysicalAi.VehicleDynamics;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -39,6 +40,7 @@ namespace PhysicalAi.Editor
             var ros2Input = vehicle.AddComponent<CombinedSlipVehicleRos2Input>();
             var randomizer = vehicle.AddComponent<DomainRandomizer>();
             var sensorRig = vehicle.AddComponent<SensorRig>();
+            var headToHead = vehicle.AddComponent<HeadToHeadScenario>();
 
             var mounts = new Transform[4];
             for (var i = 0; i < mounts.Length; i++)
@@ -69,7 +71,9 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_domainRandomizer", randomizer);
             SetReference(orchestrator, "_trackBuilder", track);
             SetReference(orchestrator, "_progressMonitor", progress);
+            SetReference(orchestrator, "_headToHeadScenario", headToHead);
             SetReference(holdoutEvaluator, "_orchestrator", orchestrator);
+            ConfigureHeadToHead(headToHead, rigidbody, CreateOpponentVehicle());
 
             System.IO.Directory.CreateDirectory("Assets/PhysicalAi/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -126,6 +130,27 @@ namespace PhysicalAi.Editor
             mounts.arraySize = sensorMounts.Length;
             for (var i = 0; i < sensorMounts.Length; i++)
                 mounts.GetArrayElementAtIndex(i).objectReferenceValue = sensorMounts[i];
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static OpponentCourseFollower CreateOpponentVehicle()
+        {
+            var opponent = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            opponent.name = "RaceOpponent";
+            opponent.transform.position = new Vector3(0f, 0.35f, 10f);
+            opponent.transform.localScale = new Vector3(1.2f, 0.4f, 2f);
+            opponent.AddComponent<Rigidbody>();
+            return opponent.AddComponent<OpponentCourseFollower>();
+        }
+
+        static void ConfigureHeadToHead(HeadToHeadScenario scenario, Rigidbody egoBody, params OpponentCourseFollower[] opponents)
+        {
+            var serialized = new SerializedObject(scenario);
+            serialized.FindProperty("_egoBody").objectReferenceValue = egoBody;
+            var array = serialized.FindProperty("_opponents");
+            array.arraySize = opponents.Length;
+            for (var i = 0; i < opponents.Length; i++)
+                array.GetArrayElementAtIndex(i).objectReferenceValue = opponents[i];
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
     }
