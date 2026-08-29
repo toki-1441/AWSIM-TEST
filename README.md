@@ -9,6 +9,16 @@
     
 AWSIM is the best digital twin simulator for [Autoware](https://github.com/autowarefoundation/autoware).
 
+## Linux batch build
+
+Build a local Linux 64-bit player with:
+
+```bash
+scripts/build_linux.sh --clean
+```
+
+The script uses the Unity version pinned in `ProjectSettings/ProjectVersion.txt` and creates `Build/AWSIM.x86_64`. See [SKILLS.md](SKILLS.md) for options and workflow details.
+
 ## Features
 
 - Optimally integrated simulation with Autoware
