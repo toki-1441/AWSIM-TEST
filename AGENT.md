@@ -3,7 +3,8 @@
 ## Git and remote policy
 
 - Do not commit to or push to a fork or any reference repository.
-- Make work in a dedicated branch of this `toki-1441/AWSIM-TEST` repository and record completed logical changes with commits.
+- Use `dev` as the integration branch. Start every goal branch from `dev`; do not make feature work directly on `main` or `dev`.
+- Commit completed logical changes in the goal branch. Once the goal is verified, squash merge it into `dev`, create the resulting integration commit, and remove the local goal branch after confirming its content matches `dev`.
 - Do not push unless the user explicitly requests it. Confirm `origin` targets `toki-1441/AWSIM-TEST` before any future push.
 
 ## Reference-material policy
