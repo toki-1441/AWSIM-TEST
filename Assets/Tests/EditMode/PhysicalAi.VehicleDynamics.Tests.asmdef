@@ -9,7 +9,8 @@
         "PhysicalAi.Planning",
         "PhysicalAi.Calibration",
         "PhysicalAi.Evaluation",
-        "PhysicalAi.Randomization"
+        "PhysicalAi.Randomization",
+        "PhysicalAi.Sensors"
     ],
     "includePlatforms": [
         "Editor"

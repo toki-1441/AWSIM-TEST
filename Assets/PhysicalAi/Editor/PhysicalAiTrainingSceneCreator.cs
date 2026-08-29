@@ -4,6 +4,7 @@
 using PhysicalAi.Planning;
 using PhysicalAi.Ros2;
 using PhysicalAi.Randomization;
+using PhysicalAi.Sensors;
 using PhysicalAi.Course;
 using PhysicalAi.VehicleDynamics;
 using UnityEditor;
@@ -36,6 +37,7 @@ namespace PhysicalAi.Editor
             var controller = vehicle.AddComponent<PlanningLowLevelController>();
             var ros2Input = vehicle.AddComponent<CombinedSlipVehicleRos2Input>();
             var randomizer = vehicle.AddComponent<DomainRandomizer>();
+            var sensorRig = vehicle.AddComponent<SensorRig>();
 
             var mounts = new Transform[4];
             for (var i = 0; i < mounts.Length; i++)
@@ -49,11 +51,12 @@ namespace PhysicalAi.Editor
             SetReference(controller, "_vehicle", dynamics);
             SetReference(ros2Input, "_vehicle", dynamics);
 
-            var camera = new GameObject("EgoCamera").AddComponent<Camera>();
-            camera.transform.SetParent(vehicle.transform, false);
-            camera.transform.localPosition = new Vector3(0f, 0.25f, 0.6f);
-            camera.transform.localRotation = Quaternion.identity;
-            ConfigureSensorMounts(randomizer, dynamics, camera.transform);
+            var camera = CreateSensorMount<Camera>(vehicle.transform, "EgoCamera", SensorModality.Camera, "camera_front", new Vector3(0f, 0.25f, 0.6f));
+            var lidar = CreateSensorMount<PlanarLidarSensor>(vehicle.transform, "EgoLidar2D", SensorModality.PlanarLidar, "lidar_2d", new Vector3(0f, 0.2f, 0.45f));
+            var tf = CreateSensorMount<TransformFrameSensor>(vehicle.transform, "TfBaseLink", SensorModality.TransformFrame, "base_link", Vector3.zero);
+            SetReference(tf, "_mount", tf.GetComponent<SensorMount>());
+            ConfigureSensorRig(sensorRig, camera, camera.GetComponent<SensorMount>(), lidar.GetComponent<SensorMount>(), tf.GetComponent<SensorMount>());
+            ConfigureSensorMounts(randomizer, dynamics, camera.transform, lidar.transform, tf.transform);
 
             var orchestrator = vehicle.AddComponent<PhysicalAiEpisodeOrchestrator>();
             var track = new GameObject("ProceduralTrack").AddComponent<ProceduralCourseTrackBuilder>();
@@ -92,13 +95,34 @@ namespace PhysicalAi.Editor
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        static void ConfigureSensorMounts(DomainRandomizer randomizer, CombinedSlipVehicle vehicle, Transform camera)
+        static T CreateSensorMount<T>(Transform parent, string name, SensorModality modality, string frameId, Vector3 localPosition) where T : Component
+        {
+            var sensor = new GameObject(name);
+            sensor.transform.SetParent(parent, false);
+            var mount = sensor.AddComponent<SensorMount>();
+            mount.Configure(modality, frameId, localPosition, Quaternion.identity);
+            return sensor.AddComponent<T>();
+        }
+
+        static void ConfigureSensorRig(SensorRig rig, Camera camera, params SensorMount[] mounts)
+        {
+            var serialized = new SerializedObject(rig);
+            serialized.FindProperty("_primaryCamera").objectReferenceValue = camera;
+            var array = serialized.FindProperty("_mounts");
+            array.arraySize = mounts.Length;
+            for (var i = 0; i < mounts.Length; i++)
+                array.GetArrayElementAtIndex(i).objectReferenceValue = mounts[i];
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void ConfigureSensorMounts(DomainRandomizer randomizer, CombinedSlipVehicle vehicle, params Transform[] sensorMounts)
         {
             SetReference(randomizer, "_vehicle", vehicle);
             var serialized = new SerializedObject(randomizer);
             var mounts = serialized.FindProperty("_sensorMounts");
-            mounts.arraySize = 1;
-            mounts.GetArrayElementAtIndex(0).objectReferenceValue = camera;
+            mounts.arraySize = sensorMounts.Length;
+            for (var i = 0; i < sensorMounts.Length; i++)
+                mounts.GetArrayElementAtIndex(i).objectReferenceValue = sensorMounts[i];
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
     }
