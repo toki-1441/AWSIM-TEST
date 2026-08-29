@@ -13,6 +13,7 @@ namespace PhysicalAi.Course
 
         GeneratedCourse _course;
         float[] _progressAtWaypoint;
+        float _progressOffsetMeters;
         public int NearestWaypointIndex { get; private set; }
         public float DistanceFromCenterline { get; private set; }
         public float ProgressMeters { get; private set; }
@@ -28,6 +29,7 @@ namespace PhysicalAi.Course
             DistanceFromCenterline = 0f;
             ProgressMeters = 0f;
             DeltaProgressMeters = 0f;
+            _progressOffsetMeters = 0f;
             if (course == null)
             {
                 _progressAtWaypoint = null;
@@ -56,6 +58,21 @@ namespace PhysicalAi.Course
             DeltaProgressMeters = 0f;
         }
 
+        public void TrimCourse(GeneratedCourse course, int removedWaypointCount)
+        {
+            if (_course == null || course == null || _progressAtWaypoint == null || removedWaypointCount <= 0 || removedWaypointCount >= _progressAtWaypoint.Length)
+            {
+                SetCourse(course);
+                return;
+            }
+            _progressOffsetMeters += _progressAtWaypoint[removedWaypointCount];
+            _course = course;
+            _progressAtWaypoint = BuildProgress(course);
+            NearestWaypointIndex = Mathf.Max(0, NearestWaypointIndex - removedWaypointCount);
+            ProgressMeters = _progressOffsetMeters + _progressAtWaypoint[Mathf.Clamp(NearestWaypointIndex, 0, _progressAtWaypoint.Length - 1)];
+            DeltaProgressMeters = 0f;
+        }
+
         public void UpdatePosition(Vector3 position)
         {
             if (_course == null || _course.Centerline.Count == 0)
@@ -72,8 +89,16 @@ namespace PhysicalAi.Course
             }
             DistanceFromCenterline = Mathf.Sqrt(nearestDistanceSquared);
             var previousProgress = ProgressMeters;
-            ProgressMeters = _progressAtWaypoint == null ? 0f : _progressAtWaypoint[NearestWaypointIndex];
+            ProgressMeters = _progressAtWaypoint == null ? 0f : _progressOffsetMeters + _progressAtWaypoint[NearestWaypointIndex];
             DeltaProgressMeters = ProgressMeters - previousProgress;
+        }
+
+        static float[] BuildProgress(GeneratedCourse course)
+        {
+            var progress = new float[course.Centerline.Count];
+            for (var index = 1; index < progress.Length; index++)
+                progress[index] = progress[index - 1] + Vector3.Distance(course.Centerline[index - 1], course.Centerline[index]);
+            return progress;
         }
     }
 }

@@ -36,6 +36,7 @@ namespace PhysicalAi.Planning
         [SerializeField] bool _useStreamingTraining;
         [SerializeField, Min(2)] int _streamingExtensionWaypointMargin = 40;
         [SerializeField, Min(0)] int _streamingRetainedWaypointsBehind = 80;
+        [SerializeField, Min(16)] int _maximumStreamingWaypointHistory = 400;
         [SerializeField, Min(1f)] float _floatingOriginThreshold = 50f;
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
@@ -203,7 +204,21 @@ namespace PhysicalAi.Planning
             _trackBuilder?.DiscardBefore(_progressMonitor.NearestWaypointIndex, _streamingRetainedWaypointsBehind);
             _progressMonitor.ExtendCourse(_course);
             _headToHeadScenario?.SetCourse(_course);
+            TrimStreamingHistoryIfNeeded();
             CourseExtended?.Invoke(_course);
+        }
+
+        void TrimStreamingHistoryIfNeeded()
+        {
+            if (_streamingCourse == null || _course == null || _progressMonitor == null || _course.Centerline.Count <= _maximumStreamingWaypointHistory)
+                return;
+            var firstRetained = Mathf.Max(0, _progressMonitor.NearestWaypointIndex - _streamingRetainedWaypointsBehind);
+            var removed = _streamingCourse.TrimBefore(firstRetained);
+            if (removed == 0) return;
+            _course = _streamingCourse.Course;
+            _trackBuilder?.RebaseWaypoints(removed, _course);
+            _progressMonitor.TrimCourse(_course, removed);
+            _headToHeadScenario?.RebaseCourse(removed);
         }
 
         void ApplyFloatingOriginIfNeeded()
