@@ -98,14 +98,6 @@ namespace PhysicalAi.Course
                 CenterlineRenderer.SetPosition(index, CenterlineRenderer.GetPosition(index) + offset);
         }
 
-        public void RebaseWaypoints(int removedWaypointCount, GeneratedCourse course)
-        {
-            if (removedWaypointCount <= 0) return;
-            var root = _trackRoot == null ? transform : _trackRoot;
-            foreach (var segment in root.GetComponentsInChildren<CourseTrackSegment>()) segment.Rebase(removedWaypointCount);
-            UpdateCenterline(root, course);
-        }
-
         void UpdateCenterline(Transform root, GeneratedCourse course)
         {
             if (CenterlineRenderer == null)

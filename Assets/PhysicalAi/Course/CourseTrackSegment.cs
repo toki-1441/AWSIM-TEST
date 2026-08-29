@@ -16,7 +16,5 @@ namespace PhysicalAi.Course
             CenterlineIndex = centerlineIndex;
             IsRoad = isRoad;
         }
-
-        public void Rebase(int removedWaypointCount) => CenterlineIndex -= removedWaypointCount;
     }
 }

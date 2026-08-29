@@ -39,8 +39,6 @@ namespace PhysicalAi.Racing
             PlaceOnCourse();
         }
 
-        public void RebaseCourse(int removedWaypointCount) => _segment = Mathf.Max(0, _segment - removedWaypointCount);
-
         void FixedUpdate()
         {
             EnsureBody();

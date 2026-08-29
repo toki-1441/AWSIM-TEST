@@ -43,16 +43,6 @@ namespace PhysicalAi.Course
             return firstNewIndex;
         }
 
-        public int TrimBefore(int firstRetainedIndex)
-        {
-            var removed = Mathf.Clamp(firstRetainedIndex, 0, Mathf.Max(0, _centerline.Count - 2));
-            if (removed == 0) return 0;
-            _centerline.RemoveRange(0, removed);
-            _curvature.RemoveRange(0, removed);
-            _safeSpeed.RemoveRange(0, removed);
-            return removed;
-        }
-
         void AppendChunk(Vector3 startPosition, float startHeadingDegrees)
         {
             var chunkSettings = _settings;
