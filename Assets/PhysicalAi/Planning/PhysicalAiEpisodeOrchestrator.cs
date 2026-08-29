@@ -22,6 +22,7 @@ namespace PhysicalAi.Planning
         [SerializeField] CombinedSlipVehicle _vehicle;
         [SerializeField] PlanningLowLevelController _lowLevelController;
         [SerializeField] PlanningDemonstrationRecorder _demonstrationRecorder;
+        [SerializeField] BehaviorCloningPolicy _behaviorCloningPolicy;
         [SerializeField] BlindCornerHazardSpawner _hazardSpawner;
         [SerializeField] DomainRandomizer _domainRandomizer;
         [SerializeField] ProceduralCourseTrackBuilder _trackBuilder;
@@ -100,9 +101,7 @@ namespace PhysicalAi.Planning
                 _maximumDeceleration);
             ObservationReady?.Invoke(observation);
 
-            var command = CommandProvider != null
-                ? CommandProvider(observation)
-                : ReferencePlanningPolicy.Choose(waypoints, observation.Features[1], _trackHalfWidth);
+            var command = ChooseCommand(observation, waypoints);
             var target = waypoints.Length == 0 ? default : waypoints[Mathf.Min(1, waypoints.Length - 1)];
             var headingError = waypoints.Length == 0 ? 0f : Mathf.Atan2(target.LocalPosition.x, Mathf.Max(0.01f, target.LocalPosition.z));
             _lowLevelController.Apply(command, _rigidbody.linearVelocity.magnitude, headingError);
@@ -153,6 +152,15 @@ namespace PhysicalAi.Planning
             return Physics.Raycast(_egoCamera.transform.position, _egoCamera.transform.forward, out var hit, _maximumVisibleDistance, ~0, QueryTriggerInteraction.Ignore)
                 ? hit.distance
                 : _maximumVisibleDistance;
+        }
+
+        PlanningCommand ChooseCommand(PlanningObservation observation, RelativeCourseWaypoint[] waypoints)
+        {
+            if (CommandProvider != null)
+                return CommandProvider(observation);
+            if (_behaviorCloningPolicy != null && _behaviorCloningPolicy.TryPredict(observation, out var bcCommand))
+                return bcCommand;
+            return ReferencePlanningPolicy.Choose(waypoints, observation.Features[1], _trackHalfWidth);
         }
 
     }

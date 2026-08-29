@@ -28,5 +28,22 @@ namespace PhysicalAi.Tests.EditMode
 
             Assert.That(reward, Is.LessThan(0f));
         }
+
+        [Test]
+        public void BehaviorCloningInference_ProducesBoundedPlanningCommand()
+        {
+            var model = new BehaviorCloningModel
+            {
+                SpeedWeights = new[] { 2f, 1f },
+                SpeedBias = -1f,
+                LateralWeights = new[] { 0.5f, 0f },
+                LateralBias = 0f
+            };
+
+            var command = BehaviorCloningInference.Predict(model, new PlanningObservation(new[] { 3f, 4f }));
+
+            Assert.That(command.DesiredSpeed, Is.EqualTo(9f));
+            Assert.That(command.DesiredLateralOffsetNormalized, Is.EqualTo(1f));
+        }
     }
 }

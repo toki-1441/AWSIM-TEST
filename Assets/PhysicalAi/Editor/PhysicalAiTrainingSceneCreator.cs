@@ -37,6 +37,7 @@ namespace PhysicalAi.Editor
             rigidbody.mass = 30f;
             var dynamics = vehicle.AddComponent<CombinedSlipVehicle>();
             var controller = vehicle.AddComponent<PlanningLowLevelController>();
+            var behaviorCloningPolicy = vehicle.AddComponent<BehaviorCloningPolicy>();
             var ros2Input = vehicle.AddComponent<CombinedSlipVehicleRos2Input>();
             var randomizer = vehicle.AddComponent<DomainRandomizer>();
             var sensorRig = vehicle.AddComponent<SensorRig>();
@@ -67,6 +68,7 @@ namespace PhysicalAi.Editor
             var progress = vehicle.AddComponent<CourseProgressMonitor>();
             SetReference(orchestrator, "_vehicle", dynamics);
             SetReference(orchestrator, "_lowLevelController", controller);
+            SetReference(orchestrator, "_behaviorCloningPolicy", behaviorCloningPolicy);
             SetReference(orchestrator, "_egoCamera", camera);
             SetReference(orchestrator, "_domainRandomizer", randomizer);
             SetReference(orchestrator, "_trackBuilder", track);

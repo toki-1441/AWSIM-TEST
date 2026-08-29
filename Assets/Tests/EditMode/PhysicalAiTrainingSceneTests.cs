@@ -23,6 +23,7 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(vehicle, Is.Not.Null);
             Assert.That(vehicle.GetComponent<Rigidbody>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<PlanningLowLevelController>(), Is.Not.Null);
+            Assert.That(vehicle.GetComponent<BehaviorCloningPolicy>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<PhysicalAiEpisodeOrchestrator>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<HoldoutEvaluationRunner>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<HeadToHeadScenario>(), Is.Not.Null);
