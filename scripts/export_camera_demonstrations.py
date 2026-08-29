@@ -10,8 +10,9 @@ def export(inputs, output):
     image_dir = output / "images"
     image_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
-    last_image = None
     for source in inputs:
+        # Sparse frames must never leak from one recording into the next.
+        last_image = None
         for line_number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), start=1):
             frame = json.loads(line)
             encoded = frame.get("CameraJpegBase64")
