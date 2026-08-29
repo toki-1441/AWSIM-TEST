@@ -58,6 +58,7 @@ namespace PhysicalAi.Planning
         public event Action<bool, bool, bool> EpisodeFinished;
         public Func<PlanningObservation, PlanningCommand> CommandProvider;
         public GeneratedCourse Course => _course;
+        public int EpisodeSeed => _episodeSeed;
 
         void Awake()
         {

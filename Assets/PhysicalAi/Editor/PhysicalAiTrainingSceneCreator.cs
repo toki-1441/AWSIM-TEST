@@ -85,12 +85,15 @@ namespace PhysicalAi.Editor
             ConfigureSensorMounts(randomizer, dynamics, camera.transform, lidar.transform, tf.transform);
 
             var orchestrator = vehicle.AddComponent<PhysicalAiEpisodeOrchestrator>();
+            var demonstrationRecorder = vehicle.AddComponent<PlanningDemonstrationRecorder>();
+            var teleoperation = vehicle.AddComponent<KeyboardTeleoperationPlanner>();
             var holdoutEvaluator = vehicle.AddComponent<HoldoutEvaluationRunner>();
             var holdoutReportWriter = vehicle.AddComponent<HoldoutEvaluationReportWriter>();
             var track = new GameObject("ProceduralTrack").AddComponent<ProceduralCourseTrackBuilder>();
             var progress = vehicle.AddComponent<CourseProgressMonitor>();
             SetReference(orchestrator, "_vehicle", dynamics);
             SetReference(orchestrator, "_lowLevelController", controller);
+            SetReference(orchestrator, "_demonstrationRecorder", demonstrationRecorder);
             SetReference(orchestrator, "_behaviorCloningPolicy", behaviorCloningPolicy);
             SetReference(orchestrator, "_hazardSpawner", hazardSpawner);
             SetReference(orchestrator, "_telemetryCalibrationApplier", telemetryCalibration);
@@ -102,6 +105,8 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_progressMonitor", progress);
             SetReference(orchestrator, "_headToHeadScenario", headToHead);
             SetReference(holdoutEvaluator, "_orchestrator", orchestrator);
+            SetReference(teleoperation, "_orchestrator", orchestrator);
+            SetReference(teleoperation, "_recorder", demonstrationRecorder);
             SetReference(holdoutReportWriter, "_runner", holdoutEvaluator);
             ConfigureHeadToHead(headToHead, rigidbody, CreateOpponentVehicle(specification));
             SetReference(hazardSpawner, "_egoCamera", camera);

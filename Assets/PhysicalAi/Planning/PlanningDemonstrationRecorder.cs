@@ -24,16 +24,27 @@ namespace PhysicalAi.Planning
     {
         [SerializeField] string _datasetDirectory = "PhysicalAiDemonstrations";
         [SerializeField] string _filePrefix = "teleop";
+        [SerializeField] bool _recordingEnabled;
 
         StreamWriter _writer;
         int _episodeId;
         int _step;
 
         public string CurrentPath { get; private set; }
+        public bool RecordingEnabled => _recordingEnabled;
+
+        public void SetRecordingEnabled(bool enabled)
+        {
+            if (_recordingEnabled == enabled) return;
+            _recordingEnabled = enabled;
+            if (!enabled) EndEpisode(false);
+        }
 
         public void BeginEpisode(int episodeId)
         {
             EndEpisode(false);
+            if (!_recordingEnabled)
+                return;
             _episodeId = episodeId;
             _step = 0;
             var directory = Path.Combine(Application.persistentDataPath, _datasetDirectory);
@@ -46,7 +57,7 @@ namespace PhysicalAi.Planning
         public void Record(PlanningObservation observation, PlanningCommand command, float reward)
         {
             if (_writer == null)
-                throw new InvalidOperationException("Call BeginEpisode before recording a demonstration.");
+                return;
 
             WriteFrame(new PlanningDemonstrationFrame
             {
