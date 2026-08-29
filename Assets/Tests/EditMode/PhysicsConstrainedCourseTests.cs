@@ -58,6 +58,22 @@ namespace PhysicalAi.Tests.EditMode
         }
 
         [Test]
+        public void StreamingState_TrimBoundsWaypointHistoryAndKeepsTail()
+        {
+            var state = new StreamingCourseState();
+            state.Reset(17, CourseGenerationSettings.Default, Vector3.zero, 0f);
+            state.AppendNextChunk();
+            var retained = state.Course.Centerline[40];
+            var count = state.Course.Centerline.Count;
+
+            var removed = state.TrimBefore(40);
+
+            Assert.That(removed, Is.EqualTo(40));
+            Assert.That(state.Course.Centerline.Count, Is.EqualTo(count - 40));
+            Assert.That(state.Course.Centerline[0], Is.EqualTo(retained));
+        }
+
+        [Test]
         public void Encode_TranslationOfCourseAndEgoDoesNotChangeObservation()
         {
             var course = PhysicsConstrainedCourseGenerator.Generate(8, CourseGenerationSettings.Default, Vector3.zero, 0f);

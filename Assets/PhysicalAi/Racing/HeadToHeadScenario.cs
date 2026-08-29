@@ -37,6 +37,12 @@ namespace PhysicalAi.Racing
             }
         }
 
+        public void RebaseCourse(int removedWaypointCount)
+        {
+            if (_opponents == null) return;
+            foreach (var opponent in _opponents) opponent?.RebaseCourse(removedWaypointCount);
+        }
+
         public OpponentKinematics ObserveClosestOpponent()
         {
             if (_egoBody == null || _opponents == null || _opponents.Length == 0)
