@@ -81,6 +81,7 @@ python3 scripts/rl_policy_server.py --port 5015     # single-environment REINFOR
 # One-time setup for the camera-capable REINFORCE baseline (outside the repository):
 python3 -m venv ../.physical-ai-venv
 ../.physical-ai-venv/bin/pip install -r scripts/requirements-vision-rl.txt
+../.physical-ai-venv/bin/python scripts/train_visual_bc.py Build/camera-demos/manifest.jsonl --output Build/physical-ai-visual-bc.pt
 ../.physical-ai-venv/bin/python scripts/train_vision_rl.py --port 5015
 
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
@@ -128,7 +129,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | Swappable sensor mounts, mandatory TF sensor | met: `SensorMount`, `SensorRig`, `TransformFrameSensor` |
 | System identification from real telemetry | partly: friction only |
 | Shared ROS2 low-level node | met structurally: the AWSIM ROS2 node is initialised idempotently and the custom vehicle subscribes to Autoware control |
-| Offline BC from in-sim teleoperation | partly: keyboard high-level teleoperation (F8, WASD/arrows), recorder and trainer are wired; recorded JSONL carries sparse JPEG camera frames alongside relative observations |
+| Offline BC from in-sim teleoperation | partly: keyboard high-level teleoperation (F8, WASD/arrows), recorder, camera export and visual BC trainer are wired; recorded JSONL carries sparse JPEG camera frames alongside relative observations |
 | Zero-shot holdout evaluation | partly: fixed holdout circuits and finite training-distribution evaluation write separate JSON reports; surveyed geometry and trained-policy results remain |
 | **Camera field of view and occlusion** | partly: rendered JPEG camera frames feed a runnable visual REINFORCE baseline; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | met structurally: deterministic chunks append ahead, rear state and logical history are bounded, and world state is shifted |
