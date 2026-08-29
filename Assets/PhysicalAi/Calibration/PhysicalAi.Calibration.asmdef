@@ -1,7 +1,7 @@
 {
     "name": "PhysicalAi.Calibration",
     "rootNamespace": "PhysicalAi.Calibration",
-    "references": ["PhysicalAi.VehicleDynamics"],
+    "references": ["PhysicalAi.VehicleDynamics", "PhysicalAi.Randomization"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

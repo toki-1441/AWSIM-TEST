@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using PhysicalAi.Calibration;
+using UnityEngine;
 
 namespace PhysicalAi.Tests.EditMode
 {
@@ -23,6 +24,17 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(result.FrictionCoefficient, Is.EqualTo(friction).Within(0.001f));
             Assert.That(result.SampleCount, Is.EqualTo(3));
             Assert.That(result.LateralAccelerationRmse, Is.LessThan(0.001f));
+        }
+
+        [Test]
+        public void CalibrationData_JsonRoundTripPreservesTelemetrySamples()
+        {
+            var data = new TelemetryCalibrationData { Samples = new[] { new CorneringTelemetrySample { Speed = 4f, YawRateRadiansPerSecond = 1f, BankDegrees = 2f } } };
+
+            var restored = JsonUtility.FromJson<TelemetryCalibrationData>(JsonUtility.ToJson(data));
+
+            Assert.That(restored.Samples, Has.Length.EqualTo(1));
+            Assert.That(restored.Samples[0].Speed, Is.EqualTo(4f));
         }
     }
 }

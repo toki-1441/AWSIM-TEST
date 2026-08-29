@@ -1,0 +1,40 @@
+// Copyright 2026
+// SPDX-License-Identifier: Apache-2.0
+
+using System;
+using PhysicalAi.Randomization;
+using PhysicalAi.VehicleDynamics;
+using UnityEngine;
+
+namespace PhysicalAi.Calibration
+{
+    [Serializable]
+    public class TelemetryCalibrationData
+    {
+        public CorneringTelemetrySample[] Samples;
+    }
+
+    /// <summary>Loads real-vehicle cornering telemetry and centers simulation friction randomization on its identified grip.</summary>
+    public sealed class TelemetryCalibrationApplier : MonoBehaviour
+    {
+        [SerializeField] TextAsset _telemetryAsset;
+        [SerializeField] CombinedSlipVehicle _vehicle;
+        [SerializeField] DomainRandomizer _domainRandomizer;
+        [SerializeField, Min(0.01f)] float _uncalibratedDomainMeanFriction = 0.9f;
+
+        public FrictionCalibrationResult LastResult { get; private set; }
+
+        public bool ApplyCalibration()
+        {
+            if (_telemetryAsset == null)
+                return false;
+            var data = JsonUtility.FromJson<TelemetryCalibrationData>(_telemetryAsset.text);
+            if (data?.Samples == null || data.Samples.Length == 0)
+                return false;
+            LastResult = TelemetryFrictionCalibrator.Estimate(data.Samples);
+            TelemetryFrictionCalibrator.Apply(_vehicle, LastResult);
+            _domainRandomizer?.SetFrictionScale(LastResult.FrictionCoefficient / _uncalibratedDomainMeanFriction);
+            return true;
+        }
+    }
+}

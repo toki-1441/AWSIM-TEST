@@ -62,6 +62,7 @@ namespace PhysicalAi.Randomization
 
         Vector3[] _basePositions;
         Quaternion[] _baseRotations;
+        float _frictionScale = 1f;
 
         void Awake()
         {
@@ -82,7 +83,7 @@ namespace PhysicalAi.Randomization
         {
             var sample = DomainRandomizationSampler.Sample(seed, _settings);
             if (_vehicle != null)
-                _vehicle.SurfaceFriction = sample.Friction;
+                _vehicle.SurfaceFriction = sample.Friction * _frictionScale;
             for (var i = 0; i < _sensorMounts.Length; i++)
             {
                 if (_sensorMounts[i] == null)
@@ -92,5 +93,8 @@ namespace PhysicalAi.Randomization
             }
             return sample;
         }
+
+        /// <summary>Centers subsequent randomized road-friction samples on a telemetry-calibrated vehicle.</summary>
+        public void SetFrictionScale(float scale) => _frictionScale = Mathf.Max(0.01f, scale);
     }
 }

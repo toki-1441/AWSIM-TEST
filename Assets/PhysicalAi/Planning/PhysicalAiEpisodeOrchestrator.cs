@@ -3,6 +3,7 @@
 
 using System;
 using PhysicalAi.Course;
+using PhysicalAi.Calibration;
 using PhysicalAi.Racing;
 using PhysicalAi.Randomization;
 using PhysicalAi.Safety;
@@ -25,6 +26,7 @@ namespace PhysicalAi.Planning
         [SerializeField] BehaviorCloningPolicy _behaviorCloningPolicy;
         [SerializeField] BlindCornerHazardSpawner _hazardSpawner;
         [SerializeField] DomainRandomizer _domainRandomizer;
+        [SerializeField] TelemetryCalibrationApplier _telemetryCalibrationApplier;
         [SerializeField] ProceduralCourseTrackBuilder _trackBuilder;
         [SerializeField] CourseProgressMonitor _progressMonitor;
         [SerializeField] HeadToHeadScenario _headToHeadScenario;
@@ -62,6 +64,7 @@ namespace PhysicalAi.Planning
             var courseOrigin = new Vector3(transform.position.x, 0f, transform.position.z);
             _course = PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
             _domainRandomizer?.ApplyEpisodeSeed(seed);
+            _telemetryCalibrationApplier?.ApplyCalibration();
             _trackBuilder?.Build(_course);
             _progressMonitor?.SetCourse(_course);
             _headToHeadScenario?.SetCourse(_course);

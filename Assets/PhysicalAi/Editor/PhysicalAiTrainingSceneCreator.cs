@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using PhysicalAi.Planning;
+using PhysicalAi.Calibration;
 using PhysicalAi.Ros2;
 using PhysicalAi.Randomization;
 using PhysicalAi.Sensors;
@@ -41,6 +42,7 @@ namespace PhysicalAi.Editor
             var behaviorCloningPolicy = vehicle.AddComponent<BehaviorCloningPolicy>();
             var ros2Input = vehicle.AddComponent<CombinedSlipVehicleRos2Input>();
             var randomizer = vehicle.AddComponent<DomainRandomizer>();
+            var telemetryCalibration = vehicle.AddComponent<TelemetryCalibrationApplier>();
             var sensorRig = vehicle.AddComponent<SensorRig>();
             var headToHead = vehicle.AddComponent<HeadToHeadScenario>();
             var hazardSpawner = vehicle.AddComponent<BlindCornerHazardSpawner>();
@@ -72,6 +74,7 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_lowLevelController", controller);
             SetReference(orchestrator, "_behaviorCloningPolicy", behaviorCloningPolicy);
             SetReference(orchestrator, "_hazardSpawner", hazardSpawner);
+            SetReference(orchestrator, "_telemetryCalibrationApplier", telemetryCalibration);
             SetReference(orchestrator, "_egoCamera", camera);
             SetReference(orchestrator, "_domainRandomizer", randomizer);
             SetReference(orchestrator, "_trackBuilder", track);
@@ -80,6 +83,8 @@ namespace PhysicalAi.Editor
             SetReference(holdoutEvaluator, "_orchestrator", orchestrator);
             ConfigureHeadToHead(headToHead, rigidbody, CreateOpponentVehicle());
             SetReference(hazardSpawner, "_egoCamera", camera);
+            SetReference(telemetryCalibration, "_vehicle", dynamics);
+            SetReference(telemetryCalibration, "_domainRandomizer", randomizer);
 
             System.IO.Directory.CreateDirectory("Assets/PhysicalAi/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);

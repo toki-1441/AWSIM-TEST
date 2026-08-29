@@ -3,6 +3,7 @@ using PhysicalAi.Planning;
 using PhysicalAi.Randomization;
 using PhysicalAi.Sensors;
 using PhysicalAi.Evaluation;
+using PhysicalAi.Calibration;
 using PhysicalAi.Racing;
 using PhysicalAi.Safety;
 using PhysicalAi.VehicleDynamics;
@@ -29,6 +30,7 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(vehicle.GetComponent<HoldoutEvaluationRunner>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<HeadToHeadScenario>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<BlindCornerHazardSpawner>(), Is.Not.Null);
+            Assert.That(vehicle.GetComponent<TelemetryCalibrationApplier>(), Is.Not.Null);
             Assert.That(Object.FindFirstObjectByType<OpponentCourseFollower>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<DomainRandomizer>(), Is.Not.Null);
             var sensorRig = vehicle.GetComponent<SensorRig>();
