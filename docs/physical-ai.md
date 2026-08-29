@@ -78,6 +78,11 @@ python3 scripts/export_camera_demonstrations.py <demos>/*.jsonl --output Build/c
 
 python3 scripts/rl_policy_server.py --port 5015     # single-environment REINFORCE trainer
 
+# One-time setup for the camera-capable REINFORCE baseline (outside the repository):
+python3 -m venv ../.physical-ai-venv
+../.physical-ai-venv/bin/pip install -r scripts/requirements-vision-rl.txt
+../.physical-ai-venv/bin/python scripts/train_vision_rl.py --port 5015
+
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
 
 python3 scripts/evaluate_goal_metrics.py --training train.json --holdout holdout.json --blind-baseline blind.json --race-baseline race.json
@@ -125,13 +130,13 @@ Measured against the [goals document](physical-ai-goals.md):
 | Shared ROS2 low-level node | met structurally: the AWSIM ROS2 node is initialised idempotently and the custom vehicle subscribes to Autoware control |
 | Offline BC from in-sim teleoperation | partly: keyboard high-level teleoperation (F8, WASD/arrows), recorder and trainer are wired; recorded JSONL carries sparse JPEG camera frames alongside relative observations |
 | Zero-shot holdout evaluation | partly: fixed holdout circuits and finite training-distribution evaluation write separate JSON reports; surveyed geometry and trained-policy results remain |
-| **Camera field of view and occlusion** | partly: rendered JPEG camera frames are available through the Python bridge; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
+| **Camera field of view and occlusion** | partly: rendered JPEG camera frames feed a runnable visual REINFORCE baseline; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | met structurally: deterministic chunks append ahead, rear state and logical history are bounded, and world state is shifted |
-| Sim RL via a Python interface | partly: `PythonRlBridge` and a dependency-free single-environment REINFORCE trainer run end-to-end; a camera-capable PPO/SAC trainer remains to be connected |
+| Sim RL via a Python interface | partly: `PythonRlBridge` supports both the dependency-free vector baseline and a camera-capable PyTorch REINFORCE trainer; a repeatable trained-policy report remains required |
 | Definition-of-done metrics | partly: completion, lap-time, collision, departure, timeout, blind-corner-hazard collision and opponent-collision rates are persisted after a holdout suite; comparative target thresholds remain to be established |
 
-The remaining structural absence is the camera perception/learning path. Everything listed as
-"partly" is wiring rather than design.
+The visual learning path is now executable. Everything listed as "partly" still needs measured
+training and evaluation evidence rather than more structural wiring.
 
 ## Implementation order
 
@@ -141,9 +146,9 @@ learning signal accumulated over inconsistent physics is silently wrong.
 1. **Vehicle physics verification.** The assembled TT-02 now has a PlayMode combined-slip
    friction-circle bound test. Steady-state cornering and braking calibration against telemetry
    remain to be added once those samples are available.
-2. **Camera-based policy training.** The rendered image channel exists; connect it to the
-   external learning bridge so blind-corner behaviour is learned from pixels rather than only
-   the conservative visibility bound.
+2. **Camera-based policy training and evaluation.** Run the visual trainer, preserve its
+   checkpoint and learning curve, then compare blind-corner safety against the no-visibility
+   baseline.
 3. **Teleoperation input and recorder wiring**, which together give the BC pipeline a data source.
 4. **Python learning interface** for the sim-RL phase.
 5. **Closed-loop holdout courses, checkpoints and a report sink**, which is what makes the
