@@ -34,12 +34,12 @@ namespace PhysicalAi.Editor
             ground.transform.localScale = new Vector3(200f, 0.2f, 200f);
             ground.transform.position = new Vector3(0f, -0.1f, 0f);
 
-            var vehicle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var vehicle = new GameObject("PhysicalAiVehicle");
             vehicle.name = "PhysicalAiVehicle";
             // The transform origin sits at the centre of gravity in plan view, so
             // wheel mounts can be placed directly at the specified axle distances.
             vehicle.transform.position = new Vector3(0f, specification.BodyCenterHeight, 0f);
-            vehicle.transform.localScale = new Vector3(specification.BodyWidth, specification.BodyHeight, specification.BodyLength);
+            CreateVehicleBodyVisual(vehicle.transform, specification);
             var rigidbody = vehicle.AddComponent<Rigidbody>();
             rigidbody.mass = specification.Mass;
             rigidbody.centerOfMass = new Vector3(0f, specification.CenterOfGravityHeight - specification.BodyCenterHeight, 0f);
@@ -72,11 +72,12 @@ namespace PhysicalAi.Editor
             SetReference(controller, "_vehicle", dynamics);
             SetReference(ros2Input, "_vehicle", dynamics);
 
-            // Both sensors sit on the top plate, the camera ahead of the LiDAR.
+            // Camera remains high and forward; the auxiliary planar LiDAR is mounted
+            // below the 0.08 m course wall top so it can observe the boundaries.
             var camera = CreateSensorMount<Camera>(vehicle.transform, "EgoCamera", SensorModality.Camera, "camera_front",
                 new Vector3(0f, specification.BodyHeight * 0.7f, specification.BodyLength * 0.3f));
             var lidar = CreateSensorMount<PlanarLidarSensor>(vehicle.transform, "EgoLidar2D", SensorModality.PlanarLidar, "lidar_2d",
-                new Vector3(0f, specification.BodyHeight * 0.9f, specification.BodyLength * 0.12f));
+                new Vector3(0f, 0.06f - specification.BodyCenterHeight, specification.BodyLength * 0.12f));
             var tf = CreateSensorMount<TransformFrameSensor>(vehicle.transform, "TfBaseLink", SensorModality.TransformFrame, "base_link", Vector3.zero);
             SetReference(tf, "_mount", tf.GetComponent<SensorMount>());
             ConfigureSensorRig(sensorRig, camera, camera.GetComponent<SensorMount>(), lidar.GetComponent<SensorMount>(), tf.GetComponent<SensorMount>());
@@ -115,6 +116,15 @@ namespace PhysicalAi.Editor
             serialized.FindProperty("_maximumBrakeTorque").floatValue = specification.MaximumBrakeTorquePerWheel;
             serialized.FindProperty("_maximumSteeringAngle").floatValue = specification.MaximumSteeringAngleDegrees;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void CreateVehicleBodyVisual(Transform vehicleRoot, VehicleSpecification specification)
+        {
+            var visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            visual.name = "VehicleBodyVisual";
+            visual.transform.SetParent(vehicleRoot, false);
+            visual.transform.localScale = new Vector3(specification.BodyWidth, specification.BodyHeight, specification.BodyLength);
+            Object.DestroyImmediate(visual.GetComponent<Collider>());
         }
 
         static void ConfigureWheels(CombinedSlipVehicle vehicle, Transform[] mounts, VehicleSpecification specification)

@@ -104,14 +104,13 @@ Beyond the streaming requirements above:
    collider-backed 0.08 m side walls for every road segment, which are visible to the auxiliary
    LiDAR and terminate an episode on impact. Corner joins remain deliberately simple; a
    continuous duct-wall mesh and its regulation-style gaps are still future fidelity work.
-2. **The regulation's colour line is not modelled.** It is the one visual cue the rules
-   guarantee, and the camera-primary policy is exactly what would use it.
+2. **A yellow rendered centreline is generated** just above the road slab. It is a visual
+   training cue for the camera pipeline only; the physical course still uses the road and walls,
+   and the regulation's exact floor-dependent line colour remains a domain-randomisation input.
 3. **No checkpoint or lap counter**, so the metric the competition scores cannot be measured on
    the holdout courses.
-4. **The 2D LiDAR sits above a duct wall.** The current mount is about 0.196 m above the floor
-   against a wall roughly 0.06–0.10 m tall, so it would scan straight over the course. This
-   matters less than it first appeared — the camera is the primary sensor and the LiDAR is
-   auxiliary — but the mount height should still be corrected when walls are built.
+4. **The 2D LiDAR mount is 0.06 m above the road**, below the default 0.08 m wall top, so the
+   auxiliary scan can observe the boundary while the camera remains the primary sensor.
 
 ## Sources
 

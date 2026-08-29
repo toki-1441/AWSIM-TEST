@@ -15,6 +15,7 @@ namespace PhysicalAi.Course
         [SerializeField] Transform _trackRoot;
 
         public int SegmentCount { get; private set; }
+        public LineRenderer CenterlineRenderer { get; private set; }
 
         public void Build(GeneratedCourse course)
         {
@@ -23,6 +24,7 @@ namespace PhysicalAi.Course
                 return;
 
             var root = _trackRoot == null ? transform : _trackRoot;
+            CreateCenterline(root, course);
             for (var index = 1; index < course.Centerline.Count; index++)
             {
                 var start = course.Centerline[index - 1];
@@ -56,6 +58,25 @@ namespace PhysicalAi.Course
                     DestroyImmediate(child);
             }
             SegmentCount = 0;
+            CenterlineRenderer = null;
+        }
+
+        void CreateCenterline(Transform root, GeneratedCourse course)
+        {
+            var lineObject = new GameObject("CourseCenterline");
+            lineObject.transform.SetParent(root, false);
+            var line = lineObject.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.positionCount = course.Centerline.Count;
+            line.startWidth = 0.025f;
+            line.endWidth = 0.025f;
+            line.numCornerVertices = 2;
+            line.material = new Material(Shader.Find("Sprites/Default"));
+            line.startColor = Color.yellow;
+            line.endColor = Color.yellow;
+            for (var index = 0; index < course.Centerline.Count; index++)
+                line.SetPosition(index, course.Centerline[index] + Vector3.up * 0.003f);
+            CenterlineRenderer = line;
         }
 
         void CreateBoundary(Transform root, string name, Vector3 position, Vector3 direction, float length)
