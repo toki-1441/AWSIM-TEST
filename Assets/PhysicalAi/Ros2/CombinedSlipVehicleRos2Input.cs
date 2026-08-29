@@ -24,10 +24,20 @@ namespace PhysicalAi.Ros2
 
         ISubscription<autoware_control_msgs.msg.Control> _subscription;
         DirectVehicleActuation _actuation;
+        bool _hasReceivedCommand;
+
+        void Start()
+        {
+            if (!AwsimRos2Node.IsInitialized)
+                AwsimRos2Node.Initialize();
+            Initialize();
+        }
 
         /// <summary>Call after AwsimRos2Node.Initialize().</summary>
         public void Initialize()
         {
+            if (_subscription != null)
+                return;
             _subscription = AwsimRos2Node.CreateSubscription<autoware_control_msgs.msg.Control>(_controlTopic, message =>
             {
                 _actuation = Ros2ControlMapping.FromAccelerationAndSteering(
@@ -35,12 +45,13 @@ namespace PhysicalAi.Ros2
                     message.Lateral.Steering_tire_angle,
                     _maximumAcceleration,
                     _maximumSteeringDegrees);
+                _hasReceivedCommand = true;
             }, _qosSettings.GetQosProfile());
         }
 
         void FixedUpdate()
         {
-            if (_vehicle == null)
+            if (_vehicle == null || !_hasReceivedCommand)
                 return;
             _vehicle.Throttle = _actuation.Throttle;
             _vehicle.Brake = _actuation.Brake;

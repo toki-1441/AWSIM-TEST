@@ -28,12 +28,15 @@ namespace Awsim.Common
         static ITimeSource _timeSource;
         static string _nodeName = "AWSIM";
         static TimeSourceType _timeSourceType = TimeSourceType.Ros2;
+        public static bool IsInitialized => _ros2UnityCore != null && _ros2UnityCore.Ok();
 
         /// <summary>
         /// Initlaize AwsimRos2Node class.
         /// </summary>
         public static void Initialize()
         {
+            if (IsInitialized)
+                return;
             _timeSource = TimeSourceFactory.GetTimeSource(_timeSourceType);
 
             _ros2UnityCore = new ROS2UnityCore();

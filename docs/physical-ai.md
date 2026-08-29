@@ -96,7 +96,7 @@ asserts the wiring.
 | Hazard spawning | yes | — | yes |
 | Head-to-head opponent and tactics | yes | tactics | yes |
 | Planning contract, reference policy, reward | yes | yes | yes |
-| ROS2 control input | yes | mapping | **component present, never initialised** |
+| ROS2 control input | yes | mapping | starts an idempotent AWSIM ROS2 node and subscribes; it applies only after a command arrives |
 | Behaviour cloning policy and trainer | yes | yes | **no model asset assigned** |
 | Demonstration recorder | yes | yes | **not in the scene** |
 | Telemetry friction calibration | yes | yes | **no telemetry asset assigned** |
@@ -116,7 +116,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | Hazards beyond blind corners | met: probabilistic, camera-visibility-driven spawning |
 | Swappable sensor mounts, mandatory TF sensor | met: `SensorMount`, `SensorRig`, `TransformFrameSensor` |
 | System identification from real telemetry | partly: friction only |
-| Shared ROS2 low-level node | partly: the component exists but is never initialised |
+| Shared ROS2 low-level node | met structurally: the AWSIM ROS2 node is initialised idempotently and the custom vehicle subscribes to Autoware control |
 | Offline BC from in-sim teleoperation | partly: recorder, trainer and policy exist, but the recorder is not in the scene and there is no teleoperation input |
 | Zero-shot holdout evaluation | partly: fixed closed circuits and a persistent JSON report sink exist; surveyed geometry, checkpoints and target-metric subscribers remain |
 | **Camera field of view and occlusion** | partly: a rendered image channel is emitted for external policies; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
