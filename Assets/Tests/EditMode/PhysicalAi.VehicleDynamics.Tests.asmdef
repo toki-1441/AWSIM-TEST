@@ -7,7 +7,8 @@
         "PhysicalAi.Safety",
         "PhysicalAi.Racing",
         "PhysicalAi.Planning",
-        "PhysicalAi.Calibration"
+        "PhysicalAi.Calibration",
+        "PhysicalAi.Evaluation"
     ],
     "includePlatforms": [
         "Editor"
