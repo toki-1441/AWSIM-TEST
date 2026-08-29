@@ -30,6 +30,7 @@ namespace PhysicalAi.VehicleDynamics
 
             public bool IsGrounded { get; private set; }
             public float AngularVelocity => _angularVelocity;
+            public TireForce LastTireForce { get; private set; }
 
             public void Step(
                 Rigidbody body,
@@ -44,7 +45,10 @@ namespace PhysicalAi.VehicleDynamics
                 float deltaTime)
             {
                 if (_suspensionMount == null)
+                {
+                    LastTireForce = default;
                     return;
+                }
 
                 var up = vehicleTransform.up;
                 var rayLength = _suspensionRestLength + _radius;
@@ -58,6 +62,7 @@ namespace PhysicalAi.VehicleDynamics
 
                 if (!IsGrounded)
                 {
+                    LastTireForce = default;
                     IntegrateWheel(driveTorque, brakeTorque, 0f, deltaTime);
                     return;
                 }
@@ -86,6 +91,7 @@ namespace PhysicalAi.VehicleDynamics
                     surfaceFriction,
                     longitudinalCoefficients,
                     lateralCoefficients);
+                LastTireForce = tireForce;
                 body.AddForceAtPosition(forward * tireForce.Longitudinal + right * tireForce.Lateral, hit.point, ForceMode.Force);
                 IntegrateWheel(driveTorque, brakeTorque, tireForce.Longitudinal, deltaTime);
             }
@@ -129,6 +135,8 @@ namespace PhysicalAi.VehicleDynamics
         public float Brake { get => _brake; set => _brake = Mathf.Clamp01(value); }
         public float Steering { get => _steering; set => _steering = Mathf.Clamp(value, -1f, 1f); }
         public float SurfaceFriction { get => _surfaceFriction; set => _surfaceFriction = Mathf.Max(0.01f, value); }
+        public int GroundedWheelCount { get; private set; }
+        public float PeakTireUtilization { get; private set; }
 
         void Awake()
         {
@@ -137,6 +145,8 @@ namespace PhysicalAi.VehicleDynamics
 
         void FixedUpdate()
         {
+            GroundedWheelCount = 0;
+            PeakTireUtilization = 0f;
             var steeringAngle = _steering * _maximumSteeringAngle;
             var brakeTorque = _brake * _maximumBrakeTorque;
             foreach (var wheel in _wheels)
@@ -152,6 +162,11 @@ namespace PhysicalAi.VehicleDynamics
                     _lateralCoefficients,
                     _groundMask,
                     Time.fixedDeltaTime);
+                if (wheel != null && wheel.IsGrounded)
+                {
+                    GroundedWheelCount++;
+                    PeakTireUtilization = Mathf.Max(PeakTireUtilization, wheel.LastTireForce.Utilization);
+                }
             }
         }
     }

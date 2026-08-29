@@ -212,6 +212,21 @@ The scene itself is generated, so after changing `VehicleSpecification` it must 
 5. **Friction is surface-specific.** Both the domain randomisation range and the telemetry
    calibration should be centred on the surface actually raced on.
 
+## Dynamics-level friction-circle verification
+
+`CombinedSlipVehiclePlayModeTests` instantiates the TT-02 specification with four ray-cast
+suspension contacts on a Unity rigidbody, commands simultaneous full drive and steering for
+120 physics steps, and records the peak tire-force utilisation from the running vehicle. The
+test requires sustained contact, nonzero utilisation, finite rigidbody velocity, and a peak no
+greater than `1.0001`; it therefore verifies the friction-circle clamp at the vehicle dynamics
+level rather than only through the pure tire-model unit test.
+
+```bash
+UNITY=~/Unity/Hub/Editor/6000.0.61f1/Editor/Unity
+$UNITY -batchmode -nographics -projectPath . -runTests -testPlatform PlayMode \
+  -testResults Logs/playmode.xml -logFile /dev/stdout
+```
+
 ## Sources
 
 - MAGP regulations: <https://minicar-autogp.org/race/regulation/>
