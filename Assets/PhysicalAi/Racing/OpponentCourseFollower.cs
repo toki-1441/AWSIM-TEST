@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using PhysicalAi.Course;
+using PhysicalAi.VehicleDynamics;
 using UnityEngine;
 
 namespace PhysicalAi.Racing
@@ -10,7 +11,7 @@ namespace PhysicalAi.Racing
     [RequireComponent(typeof(Rigidbody))]
     public sealed class OpponentCourseFollower : MonoBehaviour
     {
-        [SerializeField, Min(0f)] float _targetSpeed = 7f;
+        [SerializeField, Min(0f)] float _targetSpeed = 3f;
         [SerializeField] float _lateralOffset;
         [SerializeField, Min(0f)] float _initialProgressMeters = 10f;
 
@@ -77,7 +78,7 @@ namespace PhysicalAi.Racing
             var length = Vector3.Distance(start, end);
             var position = Vector3.Lerp(start, end, length <= 0.0001f ? 0f : _distanceOnSegment / length);
             var lateral = Vector3.Cross(Vector3.up, direction) * _lateralOffset;
-            _body.MovePosition(position + lateral + Vector3.up * 0.35f);
+            _body.MovePosition(position + lateral + Vector3.up * VehicleSpecification.Default.BodyCenterHeight);
             _body.MoveRotation(Quaternion.LookRotation(direction, Vector3.up));
         }
 

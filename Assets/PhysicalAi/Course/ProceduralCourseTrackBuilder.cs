@@ -8,8 +8,10 @@ namespace PhysicalAi.Course
     /// <summary>Turns a generated centerline into a collider-backed road for runtime episodes.</summary>
     public sealed class ProceduralCourseTrackBuilder : MonoBehaviour
     {
-        [SerializeField, Min(0.5f)] float _roadWidth = 4f;
-        [SerializeField, Min(0.05f)] float _roadThickness = 0.2f;
+        [SerializeField, Min(0.1f)] float _roadWidth = 1f;
+        [SerializeField, Min(0.01f)] float _roadThickness = 0.05f;
+        [SerializeField, Min(0.01f)] float _wallHeight = 0.08f;
+        [SerializeField, Min(0.01f)] float _wallThickness = 0.04f;
         [SerializeField] Transform _trackRoot;
 
         public int SegmentCount { get; private set; }
@@ -36,6 +38,8 @@ namespace PhysicalAi.Course
                 segment.transform.position = (start + end) * 0.5f - Vector3.up * (_roadThickness * 0.5f);
                 segment.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
                 segment.transform.localScale = new Vector3(_roadWidth, _roadThickness, length + 0.05f);
+                CreateBoundary(root, $"BoundaryLeft-{SegmentCount:D4}", (start + end) * 0.5f + Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length);
+                CreateBoundary(root, $"BoundaryRight-{SegmentCount:D4}", (start + end) * 0.5f - Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length);
                 SegmentCount++;
             }
         }
@@ -52,6 +56,17 @@ namespace PhysicalAi.Course
                     DestroyImmediate(child);
             }
             SegmentCount = 0;
+        }
+
+        void CreateBoundary(Transform root, string name, Vector3 position, Vector3 direction, float length)
+        {
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.name = name;
+            wall.transform.SetParent(root, false);
+            wall.transform.position = position;
+            wall.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+            wall.transform.localScale = new Vector3(_wallThickness, _wallHeight, length + _wallThickness);
+            wall.AddComponent<CourseBoundary>();
         }
     }
 }

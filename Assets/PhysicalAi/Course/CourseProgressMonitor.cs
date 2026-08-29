@@ -8,8 +8,8 @@ namespace PhysicalAi.Course
     /// <summary>Measures progress and lateral departure from a generated centerline.</summary>
     public sealed class CourseProgressMonitor : MonoBehaviour
     {
-        [SerializeField, Min(0.1f)] float _maximumDistanceFromCenterline = 2f;
-        [SerializeField, Min(0.01f)] float _completionDistance = 1f;
+        [SerializeField, Min(0.01f)] float _maximumDistanceFromCenterline = 0.45f;
+        [SerializeField, Min(0.01f)] float _completionDistance = 0.1f;
 
         GeneratedCourse _course;
         float[] _progressAtWaypoint;

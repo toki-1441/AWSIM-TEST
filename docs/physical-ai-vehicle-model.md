@@ -172,26 +172,17 @@ The scene values predate this work and are placeholders, not a different design:
 | Inertia tensor | (1, 1, 1) | to be measured | — |
 | Drive torque (per wheel) | 65 N·m | to be derived from motor and 8.27:1 | — |
 
-## Still sized for the placeholder
+## Course-scale alignment
 
-The vehicle now follows the specification, but the scene and course constants around it were
-chosen for the 2 m, 30 kg placeholder and have not been rescaled. Until they are, the episode
-is a 0.385 m car driving on a four-metre-wide road:
+The training distribution is now rescaled before data collection: course samples are 0.1 m
+apart, straights are 2–8 m, corner radii are 1.4–4 m, and design speed is 3.5 m/s on a 0.9-
+friction surface. The runtime road is 1.0 m wide with 0.08 m boundary walls; off-course is
+0.45 m from the centreline, planning offsets use a 0.5 m half-width, and the opponent targets
+3 m/s. Opponent ride height and generated hazard height derive from `VehicleSpecification`
+rather than a placeholder constant.
 
-| Constant | Current | Problem |
-| --- | --- | --- |
-| `CourseGenerationSettings.DesignSpeed` | 12 m/s | the vehicle tops out near 4–5 m/s |
-| `CourseGenerationSettings` corner radii | 5–30 m | huge relative to a 0.257 m wheelbase |
-| `ProceduralCourseTrackBuilder._roadWidth` | 4 m | 21× the body width |
-| `CourseProgressMonitor._maximumDistanceFromCenterline` | 2 m | off-course is never detected in practice |
-| `PhysicalAiEpisodeOrchestrator._trackHalfWidth` | 2 m | lateral offsets are scaled against the wrong width |
-| `PhysicalAiEpisodeOrchestrator._maximumVisibleDistance` | 40 m | far beyond a 2D LiDAR or this course scale |
-| `OpponentCourseFollower._targetSpeed` | 7 m/s | above the vehicle's top speed |
-| `OpponentCourseFollower` ride height | hardcoded `0.35 m` | not serialised, and sized for the placeholder |
-| `BlindCornerHazardSpawner` hazard pose and scale | `0.35 m`, `(0.6, 0.7, 0.8)` | a hazard larger than the vehicle |
-
-Rescaling these is a separate goal: it changes the course distribution and therefore invalidates
-recorded demonstrations, so it should land before any data collection starts.
+This deliberately invalidates pre-scale demonstrations; collect or train only after this change
+so that the BC and RL data distribution matches the TT-02 model.
 
 The scene itself is generated, so after changing `VehicleSpecification` it must be rebuilt via
 `Physical AI/Create Training Scene`, or in batch mode with

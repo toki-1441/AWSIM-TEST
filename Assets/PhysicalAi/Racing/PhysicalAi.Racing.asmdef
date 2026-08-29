@@ -1,7 +1,7 @@
 {
     "name": "PhysicalAi.Racing",
     "rootNamespace": "PhysicalAi.Racing",
-    "references": ["PhysicalAi.Course"],
+    "references": ["PhysicalAi.Course", "PhysicalAi.VehicleDynamics"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

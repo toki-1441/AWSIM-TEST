@@ -34,10 +34,10 @@ namespace PhysicalAi.Planning
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
         [SerializeField, Min(1)] int _observationWaypointCount = 6;
-        [SerializeField, Min(0.1f)] float _trackHalfWidth = 2f;
+        [SerializeField, Min(0.01f)] float _trackHalfWidth = 0.5f;
         [SerializeField, Min(0.01f)] float _reactionTime = 0.5f;
         [SerializeField, Min(0.01f)] float _maximumDeceleration = 6f;
-        [SerializeField, Min(1f)] float _maximumVisibleDistance = 40f;
+        [SerializeField, Min(0.1f)] float _maximumVisibleDistance = 6f;
 
         GeneratedCourse _course;
         Rigidbody _rigidbody;
@@ -161,7 +161,7 @@ namespace PhysicalAi.Planning
         {
             if (_episodeEnded || collision.collider == null)
                 return;
-            if (collision.collider.GetComponentInParent<EpisodeHazard>() != null || collision.collider.GetComponentInParent<OpponentCourseFollower>() != null)
+            if (collision.collider.GetComponentInParent<EpisodeHazard>() != null || collision.collider.GetComponentInParent<OpponentCourseFollower>() != null || collision.collider.GetComponentInParent<CourseBoundary>() != null)
                 EndEpisode(true, false);
         }
 

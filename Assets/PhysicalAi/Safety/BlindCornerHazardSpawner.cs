@@ -3,6 +3,7 @@
 
 using System;
 using PhysicalAi.Course;
+using PhysicalAi.VehicleDynamics;
 using UnityEngine;
 
 namespace PhysicalAi.Safety
@@ -51,13 +52,13 @@ namespace PhysicalAi.Safety
             if (random.NextDouble() > _spawnProbability) return false;
             var hiddenCorners = new System.Collections.Generic.List<Vector3>();
             for (var index = 2; index < course.Centerline.Count; index++)
-                if (Mathf.Abs(course.Curvature[index]) >= 0.02f && !BlindCornerSafety.IsVisible(_egoCamera, course.Centerline[index] + Vector3.up * 0.35f, _occluderMask))
-                    hiddenCorners.Add(course.Centerline[index] + Vector3.up * 0.35f);
+                if (Mathf.Abs(course.Curvature[index]) >= 0.02f && !BlindCornerSafety.IsVisible(_egoCamera, course.Centerline[index] + Vector3.up * VehicleSpecification.Default.BodyCenterHeight, _occluderMask))
+                    hiddenCorners.Add(course.Centerline[index] + Vector3.up * VehicleSpecification.Default.BodyCenterHeight);
             if (hiddenCorners.Count == 0) return false;
             ActiveHazard = _hazardPrefabs.Length == 0 ? GameObject.CreatePrimitive(PrimitiveType.Cube) : Instantiate(_hazardPrefabs[random.Next(_hazardPrefabs.Length)]);
             ActiveHazard.name = "BlindCornerHazard";
             ActiveHazard.transform.SetPositionAndRotation(hiddenCorners[random.Next(hiddenCorners.Count)], Quaternion.identity);
-            if (_hazardPrefabs.Length == 0) ActiveHazard.transform.localScale = new Vector3(0.6f, 0.7f, 0.8f);
+            if (_hazardPrefabs.Length == 0) ActiveHazard.transform.localScale = new Vector3(0.12f, 0.12f, 0.16f);
             if (ActiveHazard.GetComponent<EpisodeHazard>() == null) ActiveHazard.AddComponent<EpisodeHazard>();
             return true;
         }

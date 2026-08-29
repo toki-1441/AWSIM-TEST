@@ -17,6 +17,17 @@ namespace PhysicalAi.Tests.EditMode
         }
 
         [Test]
+        public void DefaultSettings_MatchMagpScaleAndVehicleSpeed()
+        {
+            var settings = CourseGenerationSettings.Default;
+
+            Assert.That(settings.SampleSpacing, Is.EqualTo(0.1f));
+            Assert.That(settings.MinimumCornerRadius, Is.EqualTo(1.4f));
+            Assert.That(settings.MaximumCornerRadius, Is.EqualTo(4f));
+            Assert.That(settings.DesignSpeed, Is.EqualTo(3.5f));
+        }
+
+        [Test]
         public void Encode_TranslationOfCourseAndEgoDoesNotChangeObservation()
         {
             var course = PhysicsConstrainedCourseGenerator.Generate(8, CourseGenerationSettings.Default, Vector3.zero, 0f);

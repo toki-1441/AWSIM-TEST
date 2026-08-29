@@ -17,6 +17,7 @@ namespace PhysicalAi.Tests.EditMode
 
             Assert.That(builder.SegmentCount, Is.EqualTo(course.Centerline.Count - 1));
             Assert.That(root.GetComponentInChildren<BoxCollider>(), Is.Not.Null);
+            Assert.That(root.GetComponentsInChildren<CourseBoundary>(), Has.Length.EqualTo(builder.SegmentCount * 2));
             Object.DestroyImmediate(root);
         }
     }

@@ -10,12 +10,12 @@ namespace PhysicalAi.Course
     [Serializable]
     public struct CourseGenerationSettings
     {
-        [Min(1f)] public float SampleSpacing;
+        [Min(0.01f)] public float SampleSpacing;
         [Min(1)] public int SegmentCount;
-        [Min(1f)] public float MinimumStraightLength;
-        [Min(1f)] public float MaximumStraightLength;
-        [Min(1f)] public float MinimumCornerRadius;
-        [Min(1f)] public float MaximumCornerRadius;
+        [Min(0.01f)] public float MinimumStraightLength;
+        [Min(0.01f)] public float MaximumStraightLength;
+        [Min(0.01f)] public float MinimumCornerRadius;
+        [Min(0.01f)] public float MaximumCornerRadius;
         [Min(1f)] public float MaximumCornerAngleDegrees;
         [Min(0f)] public float MaximumBankDegrees;
         [Min(0.01f)] public float FrictionCoefficient;
@@ -23,16 +23,16 @@ namespace PhysicalAi.Course
 
         public static CourseGenerationSettings Default => new CourseGenerationSettings
         {
-            SampleSpacing = 1f,
+            SampleSpacing = 0.1f,
             SegmentCount = 12,
-            MinimumStraightLength = 8f,
-            MaximumStraightLength = 25f,
-            MinimumCornerRadius = 5f,
-            MaximumCornerRadius = 30f,
+            MinimumStraightLength = 2f,
+            MaximumStraightLength = 8f,
+            MinimumCornerRadius = 1.4f,
+            MaximumCornerRadius = 4f,
             MaximumCornerAngleDegrees = 110f,
-            MaximumBankDegrees = 8f,
-            FrictionCoefficient = 1f,
-            DesignSpeed = 12f
+            MaximumBankDegrees = 0f,
+            FrictionCoefficient = 0.9f,
+            DesignSpeed = 3.5f
         };
     }
 

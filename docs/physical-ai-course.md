@@ -94,8 +94,10 @@ numbers are consistent by construction.
 
 Beyond the streaming requirements above:
 
-1. **There are no walls.** The track builder produces only a road slab. Walls bound the drivable
-   area, are what a LiDAR would see, and — on a real course — are what the car hits.
+1. **Straight-segment side walls are generated.** `ProceduralCourseTrackBuilder` now builds
+   collider-backed 0.08 m side walls for every road segment, which are visible to the auxiliary
+   LiDAR and terminate an episode on impact. Corner joins remain deliberately simple; a
+   continuous duct-wall mesh and its regulation-style gaps are still future fidelity work.
 2. **The regulation's colour line is not modelled.** It is the one visual cue the rules
    guarantee, and the camera-primary policy is exactly what would use it.
 3. **No checkpoint or lap counter**, so the metric the competition scores cannot be measured on
