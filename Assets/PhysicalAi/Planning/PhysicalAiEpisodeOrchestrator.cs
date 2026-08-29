@@ -86,6 +86,15 @@ namespace PhysicalAi.Planning
             ResetEpisode(seed, true);
         }
 
+        /// <summary>Uses the training generator as a finite course for comparable evaluation.</summary>
+        public void ResetFiniteTrainingEpisode(int seed)
+        {
+            var wasStreaming = _useStreamingTraining;
+            _useStreamingTraining = false;
+            ResetEpisode(seed, false);
+            _useStreamingTraining = wasStreaming;
+        }
+
         void ResetEpisode(int seed, bool useHoldoutCourse)
         {
             _episodeSeed = seed;

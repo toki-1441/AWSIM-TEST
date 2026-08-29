@@ -13,13 +13,16 @@ namespace PhysicalAi.Evaluation
         int _activeSeed;
         float _startTime;
         bool _active;
+        readonly bool _requireHoldoutSeed;
+
+        public HoldoutEvaluationSession(bool requireHoldoutSeed = true) => _requireHoldoutSeed = requireHoldoutSeed;
 
         public IReadOnlyList<CourseEpisodeResult> Results => _results;
         public bool HasActiveEpisode => _active;
 
         public void BeginEpisode(int seed, float startTimeSeconds)
         {
-            if (!HoldoutCourseEvaluator.IsHoldoutSeed(seed))
+            if (_requireHoldoutSeed && !HoldoutCourseEvaluator.IsHoldoutSeed(seed))
                 throw new ArgumentException("Evaluation episodes must use a fixed holdout seed.", nameof(seed));
             if (_active)
                 throw new InvalidOperationException("Complete the active episode before starting another one.");

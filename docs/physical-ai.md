@@ -89,7 +89,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (47 cases) and 2 PlayMode cases are passing.
+17 EditMode test files (48 cases) and 2 PlayMode cases are passing.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
@@ -124,7 +124,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | System identification from real telemetry | partly: friction only |
 | Shared ROS2 low-level node | met structurally: the AWSIM ROS2 node is initialised idempotently and the custom vehicle subscribes to Autoware control |
 | Offline BC from in-sim teleoperation | partly: keyboard high-level teleoperation (F8, WASD/arrows), recorder and trainer are wired; recorded JSONL carries sparse JPEG camera frames alongside relative observations |
-| Zero-shot holdout evaluation | partly: fixed closed circuits and a persistent JSON report sink exist; surveyed geometry, checkpoints and target-metric subscribers remain |
+| Zero-shot holdout evaluation | partly: fixed holdout circuits and finite training-distribution evaluation write separate JSON reports; surveyed geometry and trained-policy results remain |
 | **Camera field of view and occlusion** | partly: rendered JPEG camera frames are available through the Python bridge; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | met structurally: deterministic chunks append ahead, rear state and logical history are bounded, and world state is shifted |
 | Sim RL via a Python interface | partly: `PythonRlBridge` and a dependency-free single-environment REINFORCE trainer run end-to-end; a camera-capable PPO/SAC trainer remains to be connected |

@@ -11,6 +11,7 @@ namespace PhysicalAi.Evaluation
     public static class HoldoutCourseSuite
     {
         public static readonly int[] Seeds = { 1009, 2027, 3037, 4051, 5099, 6073, 7013, 8089 };
+        public static readonly int[] TrainingEvaluationSeeds = { 101, 211, 307, 419, 503, 607, 709, 811 };
     }
 
     [Serializable]

@@ -18,7 +18,9 @@ namespace PhysicalAi.Evaluation
         int _nextSeedIndex;
         float _episodeStartTime;
         bool _timedOut;
+        bool _trainingDistribution;
         public event Action<HoldoutEvaluationReport> EvaluationCompleted;
+        public bool IsTrainingDistributionSuite => _trainingDistribution;
 
         void OnEnable()
         {
@@ -49,9 +51,20 @@ namespace PhysicalAi.Evaluation
 
         public void RunSuite()
         {
+            Run(false);
+        }
+
+        public void RunTrainingSuite()
+        {
+            Run(true);
+        }
+
+        void Run(bool trainingDistribution)
+        {
             if (_orchestrator == null)
                 throw new InvalidOperationException("Assign a PhysicalAiEpisodeOrchestrator before running evaluation.");
-            _session = new HoldoutEvaluationSession();
+            _trainingDistribution = trainingDistribution;
+            _session = new HoldoutEvaluationSession(!trainingDistribution);
             _nextSeedIndex = 0;
             _timedOut = false;
             StartNextEpisode();
@@ -59,16 +72,18 @@ namespace PhysicalAi.Evaluation
 
         void StartNextEpisode()
         {
-            if (_nextSeedIndex >= HoldoutCourseSuite.Seeds.Length)
+            var seeds = _trainingDistribution ? HoldoutCourseSuite.TrainingEvaluationSeeds : HoldoutCourseSuite.Seeds;
+            if (_nextSeedIndex >= seeds.Length)
             {
                 EvaluationCompleted?.Invoke(_session.BuildReport());
                 return;
             }
-            var seed = HoldoutCourseSuite.Seeds[_nextSeedIndex++];
+            var seed = seeds[_nextSeedIndex++];
             _episodeStartTime = Time.time;
             _timedOut = false;
             _session.BeginEpisode(seed, _episodeStartTime);
-            _orchestrator.ResetHoldoutEpisode(seed);
+            if (_trainingDistribution) _orchestrator.ResetFiniteTrainingEpisode(seed);
+            else _orchestrator.ResetHoldoutEpisode(seed);
         }
 
         void OnEpisodeFinished(bool completed, bool collision, bool offCourse)

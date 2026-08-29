@@ -11,7 +11,8 @@ namespace PhysicalAi.Evaluation
     public sealed class HoldoutEvaluationReportWriter : MonoBehaviour
     {
         [SerializeField] HoldoutEvaluationRunner _runner;
-        [SerializeField] string _fileName = "physical-ai-holdout-report.json";
+        [SerializeField] string _holdoutFileName = "physical-ai-holdout-report.json";
+        [SerializeField] string _trainingFileName = "physical-ai-training-report.json";
 
         [Serializable]
         sealed class ReportDocument
@@ -42,7 +43,8 @@ namespace PhysicalAi.Evaluation
         {
             var directory = Path.Combine(Application.persistentDataPath, "PhysicalAi");
             Directory.CreateDirectory(directory);
-            File.WriteAllText(Path.Combine(directory, _fileName), Serialize(report));
+            var fileName = _runner != null && _runner.IsTrainingDistributionSuite ? _trainingFileName : _holdoutFileName;
+            File.WriteAllText(Path.Combine(directory, fileName), Serialize(report));
         }
 
         public static string Serialize(HoldoutEvaluationReport report)
