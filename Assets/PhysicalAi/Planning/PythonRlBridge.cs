@@ -46,6 +46,7 @@ namespace PhysicalAi.Planning
         {
             if (_orchestrator == null) return;
             _orchestrator.EpisodeFinished += OnEpisodeFinished;
+            _orchestrator.StepRewardReady += OnStepReward;
             _orchestrator.CameraObservationReady += OnCameraObservation;
         }
 
@@ -54,6 +55,7 @@ namespace PhysicalAi.Planning
             if (_orchestrator != null)
             {
                 _orchestrator.EpisodeFinished -= OnEpisodeFinished;
+                _orchestrator.StepRewardReady -= OnStepReward;
                 _orchestrator.CameraObservationReady -= OnCameraObservation;
                 if (_orchestrator.CommandProvider == RequestCommand) _orchestrator.CommandProvider = null;
             }
@@ -103,11 +105,13 @@ namespace PhysicalAi.Planning
 
         void OnEpisodeFinished(bool completed, bool collision, bool offCourse)
         {
-            _pendingReward = completed ? 10f : collision ? -20f : offCourse ? -10f : 0f;
+            _pendingReward += completed ? 10f : collision ? -20f : offCourse ? -10f : 0f;
             if (!_connected) return;
             try { _writer.WriteLine(JsonUtility.ToJson(new Request { type = "terminal", reward = _pendingReward, terminal = true })); }
             catch (IOException) { Disconnect(); }
         }
+
+        void OnStepReward(float reward) => _pendingReward += reward;
 
         void OnCameraObservation(CameraObservationFrame frame)
         {

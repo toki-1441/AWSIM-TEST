@@ -57,6 +57,7 @@ namespace PhysicalAi.Planning
         public event Action<GeneratedCourse> CourseExtended;
         public event Action<PlanningObservation> ObservationReady;
         public event Action<CameraObservationFrame> CameraObservationReady;
+        public event Action<float> StepRewardReady;
         public event Action<bool, bool, bool> EpisodeFinished;
         public Func<PlanningObservation, PlanningCommand> CommandProvider;
         public GeneratedCourse Course => _course;
@@ -155,7 +156,9 @@ namespace PhysicalAi.Planning
             _lowLevelController.Apply(command, _rigidbody.linearVelocity.magnitude, headingError);
             var safeSpeed = waypoints.Length == 0 ? observation.Features[1] : waypoints[0].MaximumSafeSpeed;
             var progressMeters = _progressMonitor == null ? 0f : _progressMonitor.DeltaProgressMeters;
-            _demonstrationRecorder?.Record(observation, command, PlanningReward.Calculate(progressMeters, false, false, _rigidbody.linearVelocity.magnitude, safeSpeed));
+            var reward = PlanningReward.Calculate(progressMeters, false, false, _rigidbody.linearVelocity.magnitude, safeSpeed);
+            _demonstrationRecorder?.Record(observation, command, reward);
+            StepRewardReady?.Invoke(reward);
         }
 
         public void EndEpisode(bool collision, bool offCourse)
