@@ -75,6 +75,8 @@ $UNITY -batchmode -nographics -quit -projectPath . \
 python3 scripts/train_bc.py <demos>/*.jsonl --output Assets/PhysicalAi/Models/bc-policy.json
 
 python3 scripts/rl_policy_server.py --port 5015     # single-environment REINFORCE trainer
+
+python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
 ```
 
 The training scene is generated rather than hand-authored, so a component that the scene must
@@ -99,7 +101,7 @@ asserts the wiring.
 | ROS2 control input | yes | mapping | starts an idempotent AWSIM ROS2 node and subscribes; it applies only after a command arrives |
 | Behaviour cloning policy and trainer | yes | yes | **no model asset assigned** |
 | Demonstration recorder | yes | yes | scene-wired; recording begins only when F8 enables keyboard teleoperation |
-| Telemetry friction calibration | yes | yes | **no telemetry asset assigned** |
+| Telemetry friction calibration | yes | yes | CSV conversion plus scene applier are ready; awaiting a real-run asset |
 | Holdout evaluation | yes | evaluator | **report has no subscriber** |
 | Sensor rig, planar LiDAR, TF | yes | yes | mounted, not read by any policy |
 | Rendered camera observation | yes | EditMode + PlayMode | mounted; emitted to external bridges without changing vector-policy compatibility |
