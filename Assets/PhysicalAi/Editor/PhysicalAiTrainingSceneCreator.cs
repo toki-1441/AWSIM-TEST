@@ -25,6 +25,9 @@ namespace PhysicalAi.Editor
         [MenuItem("Physical AI/Create Training Scene")]
         public static void CreateOrReplace()
         {
+            var specification = VehicleSpecification.Default;
+            specification.Validate();
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
             ground.name = "Ground";
@@ -33,10 +36,15 @@ namespace PhysicalAi.Editor
 
             var vehicle = GameObject.CreatePrimitive(PrimitiveType.Cube);
             vehicle.name = "PhysicalAiVehicle";
-            vehicle.transform.position = new Vector3(0f, 0.35f, 0f);
-            vehicle.transform.localScale = new Vector3(1.2f, 0.4f, 2f);
+            // The transform origin sits at the centre of gravity in plan view, so
+            // wheel mounts can be placed directly at the specified axle distances.
+            vehicle.transform.position = new Vector3(0f, specification.BodyCenterHeight, 0f);
+            vehicle.transform.localScale = new Vector3(specification.BodyWidth, specification.BodyHeight, specification.BodyLength);
             var rigidbody = vehicle.AddComponent<Rigidbody>();
-            rigidbody.mass = 30f;
+            rigidbody.mass = specification.Mass;
+            rigidbody.centerOfMass = new Vector3(0f, specification.CenterOfGravityHeight - specification.BodyCenterHeight, 0f);
+            rigidbody.inertiaTensor = specification.InertiaTensor;
+            rigidbody.inertiaTensorRotation = Quaternion.identity;
             var dynamics = vehicle.AddComponent<CombinedSlipVehicle>();
             var controller = vehicle.AddComponent<PlanningLowLevelController>();
             var behaviorCloningPolicy = vehicle.AddComponent<BehaviorCloningPolicy>();
@@ -52,15 +60,23 @@ namespace PhysicalAi.Editor
             {
                 var mount = new GameObject($"WheelMount{i + 1}");
                 mount.transform.SetParent(vehicle.transform, false);
-                mount.transform.localPosition = new Vector3(i % 2 == 0 ? -0.48f : 0.48f, -0.2f, i < 2 ? 0.65f : -0.65f);
+                var halfTrack = specification.TrackWidth * 0.5f;
+                mount.transform.localPosition = new Vector3(
+                    i % 2 == 0 ? -halfTrack : halfTrack,
+                    -specification.BodyHeight * 0.5f,
+                    i < 2 ? specification.DistanceToFrontAxle : -specification.DistanceToRearAxle);
                 mounts[i] = mount.transform;
             }
-            ConfigureWheels(dynamics, mounts);
+            ConfigureVehicle(dynamics, specification);
+            ConfigureWheels(dynamics, mounts, specification);
             SetReference(controller, "_vehicle", dynamics);
             SetReference(ros2Input, "_vehicle", dynamics);
 
-            var camera = CreateSensorMount<Camera>(vehicle.transform, "EgoCamera", SensorModality.Camera, "camera_front", new Vector3(0f, 0.25f, 0.6f));
-            var lidar = CreateSensorMount<PlanarLidarSensor>(vehicle.transform, "EgoLidar2D", SensorModality.PlanarLidar, "lidar_2d", new Vector3(0f, 0.2f, 0.45f));
+            // Both sensors sit on the top plate, the camera ahead of the LiDAR.
+            var camera = CreateSensorMount<Camera>(vehicle.transform, "EgoCamera", SensorModality.Camera, "camera_front",
+                new Vector3(0f, specification.BodyHeight * 0.7f, specification.BodyLength * 0.3f));
+            var lidar = CreateSensorMount<PlanarLidarSensor>(vehicle.transform, "EgoLidar2D", SensorModality.PlanarLidar, "lidar_2d",
+                new Vector3(0f, specification.BodyHeight * 0.9f, specification.BodyLength * 0.12f));
             var tf = CreateSensorMount<TransformFrameSensor>(vehicle.transform, "TfBaseLink", SensorModality.TransformFrame, "base_link", Vector3.zero);
             SetReference(tf, "_mount", tf.GetComponent<SensorMount>());
             ConfigureSensorRig(sensorRig, camera, camera.GetComponent<SensorMount>(), lidar.GetComponent<SensorMount>(), tf.GetComponent<SensorMount>());
@@ -81,7 +97,7 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_progressMonitor", progress);
             SetReference(orchestrator, "_headToHeadScenario", headToHead);
             SetReference(holdoutEvaluator, "_orchestrator", orchestrator);
-            ConfigureHeadToHead(headToHead, rigidbody, CreateOpponentVehicle());
+            ConfigureHeadToHead(headToHead, rigidbody, CreateOpponentVehicle(specification));
             SetReference(hazardSpawner, "_egoCamera", camera);
             SetReference(telemetryCalibration, "_vehicle", dynamics);
             SetReference(telemetryCalibration, "_domainRandomizer", randomizer);
@@ -91,7 +107,17 @@ namespace PhysicalAi.Editor
             AssetDatabase.SaveAssets();
         }
 
-        static void ConfigureWheels(CombinedSlipVehicle vehicle, Transform[] mounts)
+        static void ConfigureVehicle(CombinedSlipVehicle vehicle, VehicleSpecification specification)
+        {
+            var serialized = new SerializedObject(vehicle);
+            serialized.FindProperty("_surfaceFriction").floatValue = specification.SurfaceFriction;
+            serialized.FindProperty("_maximumDriveTorque").floatValue = specification.MaximumDriveTorquePerWheel;
+            serialized.FindProperty("_maximumBrakeTorque").floatValue = specification.MaximumBrakeTorquePerWheel;
+            serialized.FindProperty("_maximumSteeringAngle").floatValue = specification.MaximumSteeringAngleDegrees;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void ConfigureWheels(CombinedSlipVehicle vehicle, Transform[] mounts, VehicleSpecification specification)
         {
             var serialized = new SerializedObject(vehicle);
             var wheels = serialized.FindProperty("_wheels");
@@ -102,6 +128,11 @@ namespace PhysicalAi.Editor
                 wheel.FindPropertyRelative("_suspensionMount").objectReferenceValue = mounts[i];
                 wheel.FindPropertyRelative("_steerable").boolValue = i < 2;
                 wheel.FindPropertyRelative("_driven").boolValue = true;
+                wheel.FindPropertyRelative("_radius").floatValue = specification.TireRadius;
+                wheel.FindPropertyRelative("_suspensionRestLength").floatValue = specification.SuspensionRestLength;
+                wheel.FindPropertyRelative("_springRate").floatValue = specification.SpringRate;
+                wheel.FindPropertyRelative("_damperRate").floatValue = specification.DamperRate;
+                wheel.FindPropertyRelative("_rotationalInertia").floatValue = specification.WheelRotationalInertia;
             }
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
@@ -144,12 +175,12 @@ namespace PhysicalAi.Editor
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        static OpponentCourseFollower CreateOpponentVehicle()
+        static OpponentCourseFollower CreateOpponentVehicle(VehicleSpecification specification)
         {
             var opponent = GameObject.CreatePrimitive(PrimitiveType.Cube);
             opponent.name = "RaceOpponent";
-            opponent.transform.position = new Vector3(0f, 0.35f, 10f);
-            opponent.transform.localScale = new Vector3(1.2f, 0.4f, 2f);
+            opponent.transform.position = new Vector3(0f, specification.BodyCenterHeight, specification.BodyLength * 3f);
+            opponent.transform.localScale = new Vector3(specification.BodyWidth, specification.BodyHeight, specification.BodyLength);
             opponent.AddComponent<Rigidbody>();
             return opponent.AddComponent<OpponentCourseFollower>();
         }
