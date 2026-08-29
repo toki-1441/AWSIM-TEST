@@ -60,9 +60,21 @@ namespace PhysicalAi.Planning
 
         public void ResetEpisode(int seed)
         {
+            ResetEpisode(seed, false);
+        }
+
+        public void ResetHoldoutEpisode(int seed)
+        {
+            ResetEpisode(seed, true);
+        }
+
+        void ResetEpisode(int seed, bool useHoldoutCourse)
+        {
             _episodeSeed = seed;
             var courseOrigin = new Vector3(transform.position.x, 0f, transform.position.z);
-            _course = PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
+            _course = useHoldoutCourse
+                ? ClosedHoldoutCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y)
+                : PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
             _domainRandomizer?.ApplyEpisodeSeed(seed);
             _telemetryCalibrationApplier?.ApplyCalibration();
             _trackBuilder?.Build(_course);

@@ -32,9 +32,15 @@ Fixed, separately generated closed circuits, scored by lap time and the metrics 
 document. These are deliberately outside the training distribution — downscaled real courses are
 the intended source — which is what makes the zero-shot claim measurable.
 
-`HoldoutCourseSuite` currently pins eight seeds but feeds them to the same generator as training,
-so it produces the same archetype rather than a distinct closed-loop course. Closing the loop and
-sourcing distinct geometry is holdout work, not training-map work.
+`HoldoutCourseSuite` pins eight seeds and `ClosedHoldoutCourseGenerator` maps them to
+deterministic rounded-rectangle circuits within the MAGP envelope. This generator is separate
+from the open-chain training generator, and `HoldoutEvaluationRunner` explicitly selects it via
+`ResetHoldoutEpisode`. Each result is therefore a one-lap closed-circuit measurement rather than
+a training-map completion.
+
+The current variants are synthetic MAGP-envelope circuits, not yet downscaled surveyed real
+tracks. Replacing their fixed parameter table with surveyed geometry is a data-import task that
+does not change the evaluation contract.
 
 ## Real-world reference: the MAGP course
 

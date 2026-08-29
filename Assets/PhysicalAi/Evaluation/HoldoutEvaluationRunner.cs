@@ -53,7 +53,7 @@ namespace PhysicalAi.Evaluation
             }
             var seed = HoldoutCourseSuite.Seeds[_nextSeedIndex++];
             _session.BeginEpisode(seed, Time.time);
-            _orchestrator.ResetEpisode(seed);
+            _orchestrator.ResetHoldoutEpisode(seed);
         }
 
         void OnEpisodeFinished(bool completed, bool collision, bool offCourse)

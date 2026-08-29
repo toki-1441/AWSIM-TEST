@@ -28,6 +28,18 @@ namespace PhysicalAi.Tests.EditMode
         }
 
         [Test]
+        public void ClosedHoldoutGenerator_BuildsDeterministicClosedCircuit()
+        {
+            var first = ClosedHoldoutCourseGenerator.Generate(1009, CourseGenerationSettings.Default, Vector3.zero, 0f);
+            var second = ClosedHoldoutCourseGenerator.Generate(1009, CourseGenerationSettings.Default, Vector3.zero, 0f);
+
+            Assert.That(first.IsClosedLoop, Is.True);
+            Assert.That(Vector3.Distance(first.Centerline[0], first.Centerline[first.Centerline.Count - 1]), Is.LessThan(0.0001f));
+            Assert.That(first.Centerline.Count, Is.EqualTo(second.Centerline.Count));
+            Assert.That(first.Centerline.Count, Is.GreaterThan(100));
+        }
+
+        [Test]
         public void Encode_TranslationOfCourseAndEgoDoesNotChangeObservation()
         {
             var course = PhysicsConstrainedCourseGenerator.Generate(8, CourseGenerationSettings.Default, Vector3.zero, 0f);

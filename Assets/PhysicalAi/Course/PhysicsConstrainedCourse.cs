@@ -41,12 +41,14 @@ namespace PhysicalAi.Course
         public IReadOnlyList<Vector3> Centerline { get; }
         public IReadOnlyList<float> Curvature { get; }
         public IReadOnlyList<float> MaximumSafeSpeed { get; }
+        public bool IsClosedLoop { get; }
 
-        public GeneratedCourse(List<Vector3> centerline, List<float> curvature, List<float> maximumSafeSpeed)
+        public GeneratedCourse(List<Vector3> centerline, List<float> curvature, List<float> maximumSafeSpeed, bool isClosedLoop = false)
         {
             Centerline = centerline;
             Curvature = curvature;
             MaximumSafeSpeed = maximumSafeSpeed;
+            IsClosedLoop = isClosedLoop;
         }
     }
 

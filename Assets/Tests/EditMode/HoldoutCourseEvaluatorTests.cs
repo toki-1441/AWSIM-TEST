@@ -1,5 +1,7 @@
 using NUnit.Framework;
 using PhysicalAi.Evaluation;
+using PhysicalAi.Course;
+using UnityEngine;
 
 namespace PhysicalAi.Tests.EditMode
 {
@@ -41,6 +43,13 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(result.LapTimeSeconds, Is.EqualTo(11f));
             Assert.That(result.CollisionCount, Is.EqualTo(1));
             Assert.That(session.BuildReport().CompletionRate, Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void FixedSeeds_GenerateClosedHoldoutCourses()
+        {
+            foreach (var seed in HoldoutCourseSuite.Seeds)
+                Assert.That(ClosedHoldoutCourseGenerator.Generate(seed, CourseGenerationSettings.Default, Vector3.zero, 0f).IsClosedLoop, Is.True);
         }
     }
 }
