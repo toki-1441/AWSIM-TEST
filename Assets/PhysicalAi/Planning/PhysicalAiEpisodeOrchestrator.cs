@@ -30,6 +30,7 @@ namespace PhysicalAi.Planning
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
         [SerializeField, Min(1)] int _observationWaypointCount = 6;
+        [SerializeField, Min(0.1f)] float _trackHalfWidth = 2f;
         [SerializeField, Min(0.01f)] float _reactionTime = 0.5f;
         [SerializeField, Min(0.01f)] float _maximumDeceleration = 6f;
         [SerializeField, Min(1f)] float _maximumVisibleDistance = 40f;
@@ -92,8 +93,9 @@ namespace PhysicalAi.Planning
 
             var command = CommandProvider != null
                 ? CommandProvider(observation)
-                : SafeFallbackCommand(waypoints, observation.Features[1]);
-            var headingError = waypoints.Length == 0 ? 0f : Mathf.Atan2(waypoints[0].LocalPosition.x, Mathf.Max(0.01f, waypoints[0].LocalPosition.z));
+                : ReferencePlanningPolicy.Choose(waypoints, observation.Features[1], _trackHalfWidth);
+            var target = waypoints.Length == 0 ? default : waypoints[Mathf.Min(1, waypoints.Length - 1)];
+            var headingError = waypoints.Length == 0 ? 0f : Mathf.Atan2(target.LocalPosition.x, Mathf.Max(0.01f, target.LocalPosition.z));
             _lowLevelController.Apply(command, _rigidbody.linearVelocity.magnitude, headingError);
             _demonstrationRecorder?.Record(observation, command, 0f);
         }
@@ -137,10 +139,5 @@ namespace PhysicalAi.Planning
                 : _maximumVisibleDistance;
         }
 
-        static PlanningCommand SafeFallbackCommand(RelativeCourseWaypoint[] waypoints, float cameraSafeSpeed)
-        {
-            var courseSafeSpeed = waypoints.Length == 0 ? cameraSafeSpeed : waypoints[0].MaximumSafeSpeed;
-            return new PlanningCommand { DesiredSpeed = Mathf.Min(cameraSafeSpeed, courseSafeSpeed), DesiredLateralOffsetNormalized = 0f };
-        }
     }
 }
