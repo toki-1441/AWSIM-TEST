@@ -21,6 +21,8 @@ namespace PhysicalAi.Evaluation
             public float meanCompletedLapTimeSeconds;
             public float collisionRate;
             public float offCourseRate;
+            public float blindCornerHazardCollisionRate;
+            public float opponentCollisionRate;
         }
 
         void OnEnable()
@@ -50,7 +52,9 @@ namespace PhysicalAi.Evaluation
                 completionRate = report.CompletionRate,
                 meanCompletedLapTimeSeconds = float.IsPositiveInfinity(report.MeanCompletedLapTimeSeconds) ? -1f : report.MeanCompletedLapTimeSeconds,
                 collisionRate = report.CollisionRate,
-                offCourseRate = report.OffCourseRate
+                offCourseRate = report.OffCourseRate,
+                blindCornerHazardCollisionRate = report.BlindCornerHazardCollisionRate,
+                opponentCollisionRate = report.OpponentCollisionRate
             }, true);
         }
     }

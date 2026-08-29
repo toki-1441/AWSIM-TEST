@@ -50,6 +50,8 @@ namespace PhysicalAi.Planning
         StreamingCourseState _streamingCourse;
         Rigidbody _rigidbody;
         bool _episodeEnded;
+        public bool LastCollisionWasBlindCornerHazard { get; private set; }
+        public bool LastCollisionWasOpponent { get; private set; }
 
         public event Action<GeneratedCourse> CourseGenerated;
         public event Action<GeneratedCourse> CourseExtended;
@@ -102,6 +104,8 @@ namespace PhysicalAi.Planning
             _progressMonitor?.SetCourse(_course);
             _headToHeadScenario?.SetCourse(_course);
             _episodeEnded = false;
+            LastCollisionWasBlindCornerHazard = false;
+            LastCollisionWasOpponent = false;
             _hazardSpawner?.SpawnCourseHazard(_course, seed);
             _demonstrationRecorder?.BeginEpisode(seed);
             CourseGenerated?.Invoke(_course);
@@ -241,7 +245,9 @@ namespace PhysicalAi.Planning
         {
             if (_episodeEnded || collision.collider == null)
                 return;
-            if (collision.collider.GetComponentInParent<EpisodeHazard>() != null || collision.collider.GetComponentInParent<OpponentCourseFollower>() != null || collision.collider.GetComponentInParent<CourseBoundary>() != null)
+            LastCollisionWasBlindCornerHazard = collision.collider.GetComponentInParent<EpisodeHazard>() != null;
+            LastCollisionWasOpponent = collision.collider.GetComponentInParent<OpponentCourseFollower>() != null;
+            if (LastCollisionWasBlindCornerHazard || LastCollisionWasOpponent || collision.collider.GetComponentInParent<CourseBoundary>() != null)
                 EndEpisode(true, false);
         }
 

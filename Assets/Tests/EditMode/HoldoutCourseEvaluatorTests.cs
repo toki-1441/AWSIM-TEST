@@ -13,14 +13,16 @@ namespace PhysicalAi.Tests.EditMode
             var report = HoldoutCourseEvaluator.Evaluate(new[]
             {
                 new CourseEpisodeResult { CourseSeed = 1009, Completed = true, LapTimeSeconds = 10f },
-                new CourseEpisodeResult { CourseSeed = 2027, Completed = true, LapTimeSeconds = 14f, CollisionCount = 1 },
-                new CourseEpisodeResult { CourseSeed = 3037, Completed = false, OffCourseCount = 1 }
+                new CourseEpisodeResult { CourseSeed = 2027, Completed = true, LapTimeSeconds = 14f, CollisionCount = 1, BlindCornerHazardCollisionCount = 1 },
+                new CourseEpisodeResult { CourseSeed = 3037, Completed = false, OffCourseCount = 1, OpponentCollisionCount = 1 }
             });
 
             Assert.That(report.CompletionRate, Is.EqualTo(2f / 3f).Within(0.001f));
             Assert.That(report.MeanCompletedLapTimeSeconds, Is.EqualTo(12f));
             Assert.That(report.CollisionRate, Is.EqualTo(1f / 3f).Within(0.001f));
             Assert.That(report.OffCourseRate, Is.EqualTo(1f / 3f).Within(0.001f));
+            Assert.That(report.BlindCornerHazardCollisionRate, Is.EqualTo(1f / 3f).Within(0.001f));
+            Assert.That(report.OpponentCollisionRate, Is.EqualTo(1f / 3f).Within(0.001f));
         }
 
         [Test]
@@ -37,11 +39,13 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(() => session.BeginEpisode(42, 1f), Throws.ArgumentException);
 
             session.BeginEpisode(1009, 4f);
-            var result = session.CompleteEpisode(true, true, false, 15f);
+            var result = session.CompleteEpisode(true, true, false, 15f, true, true);
 
             Assert.That(result.CourseSeed, Is.EqualTo(1009));
             Assert.That(result.LapTimeSeconds, Is.EqualTo(11f));
             Assert.That(result.CollisionCount, Is.EqualTo(1));
+            Assert.That(result.BlindCornerHazardCollisionCount, Is.EqualTo(1));
+            Assert.That(result.OpponentCollisionCount, Is.EqualTo(1));
             Assert.That(session.BuildReport().CompletionRate, Is.EqualTo(1f));
         }
 

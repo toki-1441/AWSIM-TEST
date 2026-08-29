@@ -60,7 +60,8 @@ namespace PhysicalAi.Evaluation
         {
             if (_session == null || !_session.HasActiveEpisode)
                 return;
-            _session.CompleteEpisode(completed, collision, offCourse, Time.time);
+            _session.CompleteEpisode(completed, collision, offCourse, Time.time,
+                _orchestrator.LastCollisionWasBlindCornerHazard, _orchestrator.LastCollisionWasOpponent);
             StartNextEpisode();
         }
     }

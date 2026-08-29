@@ -107,12 +107,14 @@ namespace PhysicalAi.Tests.EditMode
         [Test]
         public void HoldoutReport_UsesMachineReadableFiniteValues()
         {
-            var report = new HoldoutEvaluationReport(2, 0f, float.PositiveInfinity, 0.5f, 1f);
+            var report = new HoldoutEvaluationReport(2, 0f, float.PositiveInfinity, 0.5f, 1f, 0.25f, 0.75f);
             var json = HoldoutEvaluationReportWriter.Serialize(report);
 
             StringAssert.Contains("\"episodeCount\": 2", json);
             StringAssert.Contains("\"meanCompletedLapTimeSeconds\": -1.0", json);
             StringAssert.DoesNotContain("Infinity", json);
+            StringAssert.Contains("\"blindCornerHazardCollisionRate\": 0.25", json);
+            StringAssert.Contains("\"opponentCollisionRate\": 0.75", json);
         }
     }
 }
