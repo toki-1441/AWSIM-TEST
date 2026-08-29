@@ -143,7 +143,11 @@ namespace PhysicalAi.Planning
                 _maximumDeceleration);
             ObservationReady?.Invoke(observation);
             if (_cameraObservationSensor != null && _cameraObservationSensor.CaptureIfDue())
-                CameraObservationReady?.Invoke(_cameraObservationSensor.CurrentFrame());
+            {
+                var cameraFrame = _cameraObservationSensor.CurrentFrame();
+                _demonstrationRecorder?.QueueCameraFrame(cameraFrame);
+                CameraObservationReady?.Invoke(cameraFrame);
+            }
 
             var command = ChooseCommand(observation, waypoints);
             var target = waypoints.Length == 0 ? default : waypoints[Mathf.Min(1, waypoints.Length - 1)];

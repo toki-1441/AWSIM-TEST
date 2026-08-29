@@ -119,7 +119,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | Swappable sensor mounts, mandatory TF sensor | met: `SensorMount`, `SensorRig`, `TransformFrameSensor` |
 | System identification from real telemetry | partly: friction only |
 | Shared ROS2 low-level node | met structurally: the AWSIM ROS2 node is initialised idempotently and the custom vehicle subscribes to Autoware control |
-| Offline BC from in-sim teleoperation | partly: keyboard high-level teleoperation (F8, WASD/arrows), recorder and trainer are wired; collected demonstrations and trained model validation remain |
+| Offline BC from in-sim teleoperation | partly: keyboard high-level teleoperation (F8, WASD/arrows), recorder and trainer are wired; recorded JSONL carries sparse JPEG camera frames alongside relative observations |
 | Zero-shot holdout evaluation | partly: fixed closed circuits and a persistent JSON report sink exist; surveyed geometry, checkpoints and target-metric subscribers remain |
 | **Camera field of view and occlusion** | partly: rendered JPEG camera frames are available through the Python bridge; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | met structurally: deterministic chunks append ahead, rear state and logical history are bounded, and world state is shifted |

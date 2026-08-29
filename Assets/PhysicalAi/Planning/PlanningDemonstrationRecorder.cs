@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using PhysicalAi.Sensors;
 using UnityEngine;
 
 namespace PhysicalAi.Planning
@@ -17,6 +18,8 @@ namespace PhysicalAi.Planning
         public PlanningCommand Command;
         public float Reward;
         public bool Terminal;
+        public int CameraFrameIndex = -1;
+        public string CameraJpegBase64;
     }
 
     /// <summary>Line-delimited JSON dataset writer for human teleoperation BC demonstrations.</summary>
@@ -29,6 +32,9 @@ namespace PhysicalAi.Planning
         StreamWriter _writer;
         int _episodeId;
         int _step;
+        Texture2D _cameraReadback;
+        int _pendingCameraFrameIndex = -1;
+        string _pendingCameraJpeg;
 
         public string CurrentPath { get; private set; }
         public bool RecordingEnabled => _recordingEnabled;
@@ -67,8 +73,30 @@ namespace PhysicalAi.Planning
                 Observation = observation.Features,
                 Command = command,
                 Reward = reward,
+                CameraFrameIndex = _pendingCameraFrameIndex,
+                CameraJpegBase64 = _pendingCameraJpeg,
                 Terminal = false
             });
+            _pendingCameraFrameIndex = -1;
+            _pendingCameraJpeg = null;
+        }
+
+        public void QueueCameraFrame(CameraObservationFrame frame)
+        {
+            if (_writer == null || frame.Image == null || frame.FrameIndex == _pendingCameraFrameIndex || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+                return;
+            var previous = RenderTexture.active;
+            RenderTexture.active = frame.Image;
+            if (_cameraReadback == null || _cameraReadback.width != frame.Image.width || _cameraReadback.height != frame.Image.height)
+            {
+                if (_cameraReadback != null) Destroy(_cameraReadback);
+                _cameraReadback = new Texture2D(frame.Image.width, frame.Image.height, TextureFormat.RGB24, false);
+            }
+            _cameraReadback.ReadPixels(new Rect(0, 0, frame.Image.width, frame.Image.height), 0, 0);
+            _cameraReadback.Apply(false);
+            RenderTexture.active = previous;
+            _pendingCameraFrameIndex = frame.FrameIndex;
+            _pendingCameraJpeg = Convert.ToBase64String(_cameraReadback.EncodeToJPG(75));
         }
 
         public void EndEpisode(bool terminal = true)
@@ -100,6 +128,11 @@ namespace PhysicalAi.Planning
         }
 
         void OnDisable() => EndEpisode(false);
+
+        void OnDestroy()
+        {
+            if (_cameraReadback != null) Destroy(_cameraReadback);
+        }
 
         void WriteFrame(PlanningDemonstrationFrame frame)
         {
