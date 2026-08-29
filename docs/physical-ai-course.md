@@ -16,13 +16,12 @@ This is now implemented in part; the remaining constraints are explicit:
 - **Floating origin is active for streamed training.** At a configurable planar-distance
   threshold, the vehicle is returned near the origin and the centreline, retained road and wall
   geometry, opponents, and active hazards shift by the same offset. Ego-relative observations
-  are therefore unchanged. The centreline and waypoint history still grow indefinitely and need
-  bounded storage for truly unbounded runs.
+  are therefore unchanged.
 - **Chunk lifecycle is incremental.** `StreamingCourseState` deterministically continues chunks
   from the prior end pose and heading. `ProceduralCourseTrackBuilder.Append` adds only the new
-  road and wall colliders, then discards a retained-window-external rear section. The rendered
-  centreline and logical waypoint history are intentionally retained for now, so floating-origin
-  work must also bound those structures.
+  road and wall colliders, then discards a retained-window-external rear section. Once the
+  configurable logical-history cap is reached, the same retained waypoint window is rebased;
+  progress and physical-segment indices remain continuous.
 - **"Course completed" is not an outcome in training.** The orchestrator extends before the
   streamed tail is reached. Evaluation explicitly selects the separate finite holdout loop.
 

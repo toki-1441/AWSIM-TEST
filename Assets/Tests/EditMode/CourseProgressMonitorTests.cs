@@ -36,5 +36,26 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(monitor.IsCompleted, Is.True);
             Object.DestroyImmediate(root);
         }
+
+        [Test]
+        public void TrimCourse_PreservesLifetimeProgressWhileRebasingWaypointIndices()
+        {
+            var root = new GameObject("ProgressTest");
+            var monitor = root.AddComponent<CourseProgressMonitor>();
+            var streaming = new StreamingCourseState();
+            streaming.Reset(4, CourseGenerationSettings.Default, Vector3.zero, 0f);
+            streaming.AppendNextChunk();
+            monitor.SetCourse(streaming.Course);
+            monitor.UpdatePosition(streaming.Course.Centerline[60]);
+            var progress = monitor.ProgressMeters;
+
+            var removed = streaming.TrimBefore(40);
+            monitor.TrimCourse(streaming.Course, removed);
+
+            Assert.That(monitor.NearestWaypointIndex, Is.EqualTo(20));
+            Assert.That(monitor.ProgressMeters, Is.EqualTo(progress).Within(0.0001f));
+            Assert.That(monitor.DeltaProgressMeters, Is.Zero);
+            Object.DestroyImmediate(root);
+        }
     }
 }

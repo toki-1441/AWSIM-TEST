@@ -81,7 +81,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (44 cases) and 2 PlayMode cases are passing.
+17 EditMode test files (46 cases) and 2 PlayMode cases are passing.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
@@ -118,12 +118,12 @@ Measured against the [goals document](physical-ai-goals.md):
 | Offline BC from in-sim teleoperation | partly: recorder, trainer and policy exist, but the recorder is not in the scene and there is no teleoperation input |
 | Zero-shot holdout evaluation | partly: fixed closed circuits and a persistent JSON report sink exist; surveyed geometry, checkpoints and target-metric subscribers remain |
 | **Camera field of view and occlusion** | partly: a rendered image channel is emitted for external policies; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
-| **Endless streaming map with floating origin** | partly: deterministic chunks append ahead, rear colliders are discarded, and world state is shifted; bounded logical history remains |
+| **Endless streaming map with floating origin** | met structurally: deterministic chunks append ahead, rear state and logical history are bounded, and world state is shifted |
 | Sim RL via a Python interface | **not started**: no ML-Agents package in the manifest |
 | Definition-of-done metrics | partly: completion, lap-time, collision and departure rates are persisted after a holdout suite; blind-corner safety and head-to-head outcomes remain unmeasured |
 
-The two structural absences are the camera perception path and the streaming map. Everything
-listed as "partly" is wiring rather than design.
+The remaining structural absence is the camera perception/learning path. Everything listed as
+"partly" is wiring rather than design.
 
 ## Implementation order
 
@@ -133,16 +133,12 @@ learning signal accumulated over inconsistent physics is silently wrong.
 1. **Vehicle physics verification.** The assembled TT-02 now has a PlayMode combined-slip
    friction-circle bound test. Steady-state cornering and braking calibration against telemetry
    remain to be added once those samples are available.
-2. **Bounded streaming history.** Resumable chunk generation, incremental build and rear discard,
-   plus a floating-origin shift of course, physical track, ego, opponents and active hazards are
-   in place. The centreline/waypoint history still needs a bounded representation before
-   long-running data collection.
-3. **Camera-based policy training.** The rendered image channel exists; connect it to the
+2. **Camera-based policy training.** The rendered image channel exists; connect it to the
    external learning bridge so blind-corner behaviour is learned from pixels rather than only
    the conservative visibility bound.
-4. **Teleoperation input and recorder wiring**, which together give the BC pipeline a data source.
-5. **Python learning interface** for the sim-RL phase.
-6. **Closed-loop holdout courses, checkpoints and a report sink**, which is what makes the
+3. **Teleoperation input and recorder wiring**, which together give the BC pipeline a data source.
+4. **Python learning interface** for the sim-RL phase.
+5. **Closed-loop holdout courses, checkpoints and a report sink**, which is what makes the
    definition-of-done metrics measurable.
 
 ## Documents
