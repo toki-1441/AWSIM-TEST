@@ -79,6 +79,8 @@ python3 scripts/export_camera_demonstrations.py <demos>/*.jsonl --output Build/c
 python3 scripts/rl_policy_server.py --port 5015     # single-environment REINFORCE trainer
 
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
+
+python3 scripts/evaluate_goal_metrics.py --training train.json --holdout holdout.json --blind-baseline blind.json --race-baseline race.json
 ```
 
 The training scene is generated rather than hand-authored, so a component that the scene must
