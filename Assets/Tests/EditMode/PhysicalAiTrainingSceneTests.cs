@@ -2,6 +2,7 @@ using NUnit.Framework;
 using PhysicalAi.Planning;
 using PhysicalAi.Randomization;
 using PhysicalAi.Sensors;
+using PhysicalAi.Evaluation;
 using PhysicalAi.VehicleDynamics;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -22,6 +23,7 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(vehicle.GetComponent<Rigidbody>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<PlanningLowLevelController>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<PhysicalAiEpisodeOrchestrator>(), Is.Not.Null);
+            Assert.That(vehicle.GetComponent<HoldoutEvaluationRunner>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<DomainRandomizer>(), Is.Not.Null);
             var sensorRig = vehicle.GetComponent<SensorRig>();
             Assert.That(sensorRig, Is.Not.Null);

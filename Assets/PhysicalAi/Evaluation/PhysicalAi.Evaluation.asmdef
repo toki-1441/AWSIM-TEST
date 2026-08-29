@@ -1,7 +1,7 @@
 {
     "name": "PhysicalAi.Evaluation",
     "rootNamespace": "PhysicalAi.Evaluation",
-    "references": ["PhysicalAi.Course"],
+    "references": ["PhysicalAi.Course", "PhysicalAi.Planning"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

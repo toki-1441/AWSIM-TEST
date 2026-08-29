@@ -27,5 +27,20 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(HoldoutCourseEvaluator.IsHoldoutSeed(1009), Is.True);
             Assert.That(HoldoutCourseEvaluator.IsHoldoutSeed(42), Is.False);
         }
+
+        [Test]
+        public void Session_RejectsTrainingSeedsAndBuildsRuntimeResults()
+        {
+            var session = new HoldoutEvaluationSession();
+            Assert.That(() => session.BeginEpisode(42, 1f), Throws.ArgumentException);
+
+            session.BeginEpisode(1009, 4f);
+            var result = session.CompleteEpisode(true, true, false, 15f);
+
+            Assert.That(result.CourseSeed, Is.EqualTo(1009));
+            Assert.That(result.LapTimeSeconds, Is.EqualTo(11f));
+            Assert.That(result.CollisionCount, Is.EqualTo(1));
+            Assert.That(session.BuildReport().CompletionRate, Is.EqualTo(1f));
+        }
     }
 }

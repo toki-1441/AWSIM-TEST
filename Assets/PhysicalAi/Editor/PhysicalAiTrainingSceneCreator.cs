@@ -6,6 +6,7 @@ using PhysicalAi.Ros2;
 using PhysicalAi.Randomization;
 using PhysicalAi.Sensors;
 using PhysicalAi.Course;
+using PhysicalAi.Evaluation;
 using PhysicalAi.VehicleDynamics;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -59,6 +60,7 @@ namespace PhysicalAi.Editor
             ConfigureSensorMounts(randomizer, dynamics, camera.transform, lidar.transform, tf.transform);
 
             var orchestrator = vehicle.AddComponent<PhysicalAiEpisodeOrchestrator>();
+            var holdoutEvaluator = vehicle.AddComponent<HoldoutEvaluationRunner>();
             var track = new GameObject("ProceduralTrack").AddComponent<ProceduralCourseTrackBuilder>();
             var progress = vehicle.AddComponent<CourseProgressMonitor>();
             SetReference(orchestrator, "_vehicle", dynamics);
@@ -67,6 +69,7 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_domainRandomizer", randomizer);
             SetReference(orchestrator, "_trackBuilder", track);
             SetReference(orchestrator, "_progressMonitor", progress);
+            SetReference(holdoutEvaluator, "_orchestrator", orchestrator);
 
             System.IO.Directory.CreateDirectory("Assets/PhysicalAi/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
