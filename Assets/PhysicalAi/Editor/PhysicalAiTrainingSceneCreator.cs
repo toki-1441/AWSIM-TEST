@@ -8,6 +8,7 @@ using PhysicalAi.Sensors;
 using PhysicalAi.Course;
 using PhysicalAi.Evaluation;
 using PhysicalAi.Racing;
+using PhysicalAi.Safety;
 using PhysicalAi.VehicleDynamics;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -42,6 +43,7 @@ namespace PhysicalAi.Editor
             var randomizer = vehicle.AddComponent<DomainRandomizer>();
             var sensorRig = vehicle.AddComponent<SensorRig>();
             var headToHead = vehicle.AddComponent<HeadToHeadScenario>();
+            var hazardSpawner = vehicle.AddComponent<BlindCornerHazardSpawner>();
 
             var mounts = new Transform[4];
             for (var i = 0; i < mounts.Length; i++)
@@ -69,6 +71,7 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_vehicle", dynamics);
             SetReference(orchestrator, "_lowLevelController", controller);
             SetReference(orchestrator, "_behaviorCloningPolicy", behaviorCloningPolicy);
+            SetReference(orchestrator, "_hazardSpawner", hazardSpawner);
             SetReference(orchestrator, "_egoCamera", camera);
             SetReference(orchestrator, "_domainRandomizer", randomizer);
             SetReference(orchestrator, "_trackBuilder", track);
@@ -76,6 +79,7 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_headToHeadScenario", headToHead);
             SetReference(holdoutEvaluator, "_orchestrator", orchestrator);
             ConfigureHeadToHead(headToHead, rigidbody, CreateOpponentVehicle());
+            SetReference(hazardSpawner, "_egoCamera", camera);
 
             System.IO.Directory.CreateDirectory("Assets/PhysicalAi/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);

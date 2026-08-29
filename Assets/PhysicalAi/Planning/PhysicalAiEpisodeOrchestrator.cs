@@ -66,7 +66,7 @@ namespace PhysicalAi.Planning
             _progressMonitor?.SetCourse(_course);
             _headToHeadScenario?.SetCourse(_course);
             _episodeEnded = false;
-            _hazardSpawner?.SpawnEpisodeHazard(seed);
+            _hazardSpawner?.SpawnCourseHazard(_course, seed);
             _demonstrationRecorder?.BeginEpisode(seed);
             CourseGenerated?.Invoke(_course);
         }
@@ -152,6 +152,14 @@ namespace PhysicalAi.Planning
             return Physics.Raycast(_egoCamera.transform.position, _egoCamera.transform.forward, out var hit, _maximumVisibleDistance, ~0, QueryTriggerInteraction.Ignore)
                 ? hit.distance
                 : _maximumVisibleDistance;
+        }
+
+        void OnCollisionEnter(Collision collision)
+        {
+            if (_episodeEnded || collision.collider == null)
+                return;
+            if (collision.collider.GetComponentInParent<EpisodeHazard>() != null || collision.collider.GetComponentInParent<OpponentCourseFollower>() != null)
+                EndEpisode(true, false);
         }
 
         PlanningCommand ChooseCommand(PlanningObservation observation, RelativeCourseWaypoint[] waypoints)

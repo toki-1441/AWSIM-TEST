@@ -1,7 +1,7 @@
 {
     "name": "PhysicalAi.Safety",
     "rootNamespace": "PhysicalAi.Safety",
-    "references": [],
+    "references": ["PhysicalAi.Course"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
