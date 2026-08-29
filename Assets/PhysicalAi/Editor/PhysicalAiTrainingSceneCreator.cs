@@ -85,6 +85,7 @@ namespace PhysicalAi.Editor
             ConfigureSensorMounts(randomizer, dynamics, camera.transform, lidar.transform, tf.transform);
 
             var orchestrator = vehicle.AddComponent<PhysicalAiEpisodeOrchestrator>();
+            var pythonRlBridge = vehicle.AddComponent<PythonRlBridge>();
             var demonstrationRecorder = vehicle.AddComponent<PlanningDemonstrationRecorder>();
             var teleoperation = vehicle.AddComponent<KeyboardTeleoperationPlanner>();
             var holdoutEvaluator = vehicle.AddComponent<HoldoutEvaluationRunner>();
@@ -92,6 +93,7 @@ namespace PhysicalAi.Editor
             var track = new GameObject("ProceduralTrack").AddComponent<ProceduralCourseTrackBuilder>();
             var progress = vehicle.AddComponent<CourseProgressMonitor>();
             SetReference(orchestrator, "_vehicle", dynamics);
+            SetReference(pythonRlBridge, "_orchestrator", orchestrator);
             SetReference(orchestrator, "_lowLevelController", controller);
             SetReference(orchestrator, "_demonstrationRecorder", demonstrationRecorder);
             SetReference(orchestrator, "_behaviorCloningPolicy", behaviorCloningPolicy);

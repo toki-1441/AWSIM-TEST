@@ -9,7 +9,9 @@ import json
 import socketserver
 
 
-def choose_action(observation):
+def choose_action(observation, camera_jpeg_base64=None):
+    # `camera_jpeg_base64` is the rendered primary sensor frame. Decode it in a
+    # vision policy; this reference policy deliberately retains the safe vector fallback.
     safe_speed = observation[1] if len(observation) > 1 else 0.0
     return {"desiredSpeed": max(0.0, safe_speed), "desiredLateralOffsetNormalized": 0.0}
 
@@ -19,7 +21,7 @@ class Handler(socketserver.StreamRequestHandler):
         for raw in self.rfile:
             request = json.loads(raw)
             if request.get("type") == "step":
-                self.wfile.write((json.dumps(choose_action(request.get("observation", []))) + "\n").encode())
+                self.wfile.write((json.dumps(choose_action(request.get("observation", []), request.get("cameraJpegBase64"))) + "\n").encode())
 
 
 def main():

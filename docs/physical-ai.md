@@ -119,7 +119,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | Shared ROS2 low-level node | met structurally: the AWSIM ROS2 node is initialised idempotently and the custom vehicle subscribes to Autoware control |
 | Offline BC from in-sim teleoperation | partly: keyboard high-level teleoperation (F8, WASD/arrows), recorder and trainer are wired; collected demonstrations and trained model validation remain |
 | Zero-shot holdout evaluation | partly: fixed closed circuits and a persistent JSON report sink exist; surveyed geometry, checkpoints and target-metric subscribers remain |
-| **Camera field of view and occlusion** | partly: a rendered image channel is emitted for external policies; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
+| **Camera field of view and occlusion** | partly: rendered JPEG camera frames are available through the Python bridge; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | met structurally: deterministic chunks append ahead, rear state and logical history are bounded, and world state is shifted |
 | Sim RL via a Python interface | partly: `PythonRlBridge` provides a framework-neutral one-environment TCP protocol; a PPO/SAC trainer remains to be connected |
 | Definition-of-done metrics | partly: completion, lap-time, collision and departure rates are persisted after a holdout suite; blind-corner safety and head-to-head outcomes remain unmeasured |
