@@ -74,6 +74,8 @@ $UNITY -batchmode -nographics -quit -projectPath . \
 
 python3 scripts/train_bc.py <demos>/*.jsonl --output Assets/PhysicalAi/Models/bc-policy.json
 
+python3 scripts/export_camera_demonstrations.py <demos>/*.jsonl --output Build/camera-demos
+
 python3 scripts/rl_policy_server.py --port 5015     # single-environment REINFORCE trainer
 
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
