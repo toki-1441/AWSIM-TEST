@@ -13,11 +13,11 @@ road never seen before.
 
 This is now implemented in part; the remaining constraints are explicit:
 
-- **Floating origin is a prerequisite.** Coordinates grow without bound, so single-precision
-  degradation is inevitable unless the vehicle is kept near the origin and the world is shifted
-  instead. Everything holding world positions has to shift together: the centreline, built road
-  and wall geometry, opponents and hazards. Ego-relative observations are unaffected, which is
-  one more reason the relative encoding is the right contract.
+- **Floating origin is active for streamed training.** At a configurable planar-distance
+  threshold, the vehicle is returned near the origin and the centreline, retained road and wall
+  geometry, opponents, and active hazards shift by the same offset. Ego-relative observations
+  are therefore unchanged. The centreline and waypoint history still grow indefinitely and need
+  bounded storage for truly unbounded runs.
 - **Chunk lifecycle is incremental.** `StreamingCourseState` deterministically continues chunks
   from the prior end pose and heading. `ProceduralCourseTrackBuilder.Append` adds only the new
   road and wall colliders, then discards a retained-window-external rear section. The rendered

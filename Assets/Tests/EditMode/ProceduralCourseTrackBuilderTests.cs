@@ -38,5 +38,24 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(root.GetComponentsInChildren<CourseTrackSegment>().Length, Is.EqualTo(builder.SegmentCount * 3));
             Object.DestroyImmediate(root);
         }
+
+        [Test]
+        public void Translate_MovesColliderGeometryAndWorldSpaceCentrelineTogether()
+        {
+            var root = new GameObject("TrackTest");
+            var builder = root.AddComponent<ProceduralCourseTrackBuilder>();
+            var course = PhysicsConstrainedCourseGenerator.Generate(1, CourseGenerationSettings.Default, Vector3.zero, 0f);
+            builder.Build(course);
+            var road = root.GetComponentInChildren<CourseTrackSegment>();
+            var roadPosition = road.transform.position;
+            var linePosition = builder.CenterlineRenderer.GetPosition(0);
+            var offset = new Vector3(60f, 0f, -40f);
+
+            builder.Translate(offset);
+
+            Assert.That(road.transform.position, Is.EqualTo(roadPosition + offset));
+            Assert.That(builder.CenterlineRenderer.GetPosition(0), Is.EqualTo(linePosition + offset));
+            Object.DestroyImmediate(root);
+        }
     }
 }

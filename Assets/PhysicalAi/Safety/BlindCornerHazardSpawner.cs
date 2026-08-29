@@ -68,5 +68,12 @@ namespace PhysicalAi.Safety
             if (ActiveHazard != null) Destroy(ActiveHazard);
             ActiveHazard = null;
         }
+
+        /// <summary>Moves the active dynamic obstacle together with a floating-origin shift.</summary>
+        public void Translate(Vector3 offset)
+        {
+            if (ActiveHazard != null)
+                ActiveHazard.transform.position += offset;
+        }
     }
 }

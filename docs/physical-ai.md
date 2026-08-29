@@ -81,7 +81,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (41 cases) and 2 PlayMode cases are passing.
+17 EditMode test files (43 cases) and 2 PlayMode cases are passing.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
@@ -118,7 +118,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | Offline BC from in-sim teleoperation | partly: recorder, trainer and policy exist, but the recorder is not in the scene and there is no teleoperation input |
 | Zero-shot holdout evaluation | partly: fixed seeds now generate separate closed circuits, but the report has no subscriber |
 | **Camera field of view and occlusion** | partly: a rendered image channel is emitted for external policies; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
-| **Endless streaming map with floating origin** | partly: deterministic chunks append ahead and rear colliders are discarded; floating origin and bounded logical history remain |
+| **Endless streaming map with floating origin** | partly: deterministic chunks append ahead, rear colliders are discarded, and world state is shifted; bounded logical history remains |
 | Sim RL via a Python interface | **not started**: no ML-Agents package in the manifest |
 | Definition-of-done metrics | **not measurable**: no report sink, and no metric for blind-corner safety or head-to-head outcomes |
 
@@ -133,9 +133,10 @@ learning signal accumulated over inconsistent physics is silently wrong.
 1. **Vehicle physics verification.** The assembled TT-02 now has a PlayMode combined-slip
    friction-circle bound test. Steady-state cornering and braking calibration against telemetry
    remain to be added once those samples are available.
-2. **Floating origin and bounded streaming history.** Resumable chunk generation, incremental
-   build and rear discard are in place. The remaining origin shift must move every world-position
-   holder together and bound the centreline/waypoint history before long-running data collection.
+2. **Bounded streaming history.** Resumable chunk generation, incremental build and rear discard,
+   plus a floating-origin shift of course, physical track, ego, opponents and active hazards are
+   in place. The centreline/waypoint history still needs a bounded representation before
+   long-running data collection.
 3. **Camera-based policy training.** The rendered image channel exists; connect it to the
    external learning bridge so blind-corner behaviour is learned from pixels rather than only
    the conservative visibility bound.

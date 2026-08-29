@@ -36,6 +36,7 @@ namespace PhysicalAi.Planning
         [SerializeField] bool _useStreamingTraining;
         [SerializeField, Min(2)] int _streamingExtensionWaypointMargin = 40;
         [SerializeField, Min(0)] int _streamingRetainedWaypointsBehind = 80;
+        [SerializeField, Min(1f)] float _floatingOriginThreshold = 50f;
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
         [SerializeField, Min(1)] int _observationWaypointCount = 6;
@@ -109,6 +110,7 @@ namespace PhysicalAi.Planning
             if (_episodeEnded || _course == null || _vehicle == null || _lowLevelController == null || _rigidbody == null)
                 return;
 
+            ApplyFloatingOriginIfNeeded();
             _progressMonitor?.UpdatePosition(_rigidbody.position);
             ExtendStreamingCourseIfNeeded();
             if (_progressMonitor != null && _progressMonitor.IsOffCourse)
@@ -202,6 +204,21 @@ namespace PhysicalAi.Planning
             _progressMonitor.ExtendCourse(_course);
             _headToHeadScenario?.SetCourse(_course);
             CourseExtended?.Invoke(_course);
+        }
+
+        void ApplyFloatingOriginIfNeeded()
+        {
+            if (_streamingCourse == null)
+                return;
+            var planarPosition = new Vector3(_rigidbody.position.x, 0f, _rigidbody.position.z);
+            if (planarPosition.sqrMagnitude < _floatingOriginThreshold * _floatingOriginThreshold)
+                return;
+            var offset = -planarPosition;
+            _course.Translate(offset);
+            _trackBuilder?.Translate(offset);
+            _rigidbody.position += offset;
+            _headToHeadScenario?.Translate(offset);
+            _hazardSpawner?.Translate(offset);
         }
 
         void OnCollisionEnter(Collision collision)

@@ -71,5 +71,20 @@ namespace PhysicalAi.Tests.EditMode
                 Assert.That(translatedObservation[i].Curvature, Is.EqualTo(baseObservation[i].Curvature));
             }
         }
+
+        [Test]
+        public void GeneratedCourse_TranslateMovesEveryWaypointWithoutChangingRelativeObservation()
+        {
+            var course = PhysicsConstrainedCourseGenerator.Generate(8, CourseGenerationSettings.Default, Vector3.zero, 0f);
+            var before = RelativeCourseObservation.Encode(course, Vector3.zero, Quaternion.identity, 0, 4);
+            var offset = new Vector3(-75f, 0f, 120f);
+
+            course.Translate(offset);
+            var after = RelativeCourseObservation.Encode(course, offset, Quaternion.identity, 0, 4);
+
+            Assert.That(course.Centerline[0], Is.EqualTo(offset));
+            for (var index = 0; index < before.Length; index++)
+                Assert.That(Vector3.Distance(before[index].LocalPosition, after[index].LocalPosition), Is.LessThan(0.0001f));
+        }
     }
 }

@@ -38,6 +38,7 @@ namespace PhysicalAi.Course
 
     public sealed class GeneratedCourse
     {
+        readonly List<Vector3> _centerline;
         public IReadOnlyList<Vector3> Centerline { get; }
         public IReadOnlyList<float> Curvature { get; }
         public IReadOnlyList<float> MaximumSafeSpeed { get; }
@@ -45,10 +46,18 @@ namespace PhysicalAi.Course
 
         public GeneratedCourse(List<Vector3> centerline, List<float> curvature, List<float> maximumSafeSpeed, bool isClosedLoop = false)
         {
+            _centerline = centerline ?? throw new ArgumentNullException(nameof(centerline));
             Centerline = centerline;
             Curvature = curvature;
             MaximumSafeSpeed = maximumSafeSpeed;
             IsClosedLoop = isClosedLoop;
+        }
+
+        /// <summary>Moves the world-space course representation without changing its geometry.</summary>
+        public void Translate(Vector3 offset)
+        {
+            for (var index = 0; index < _centerline.Count; index++)
+                _centerline[index] += offset;
         }
     }
 

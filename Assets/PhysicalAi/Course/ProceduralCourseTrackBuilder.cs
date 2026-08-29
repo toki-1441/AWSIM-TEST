@@ -87,6 +87,17 @@ namespace PhysicalAi.Course
             SegmentCount = Mathf.Max(0, SegmentCount);
         }
 
+        /// <summary>Moves retained physical track geometry and its world-space visual centreline.</summary>
+        public void Translate(Vector3 offset)
+        {
+            var root = _trackRoot == null ? transform : _trackRoot;
+            root.position += offset;
+            if (CenterlineRenderer == null)
+                return;
+            for (var index = 0; index < CenterlineRenderer.positionCount; index++)
+                CenterlineRenderer.SetPosition(index, CenterlineRenderer.GetPosition(index) + offset);
+        }
+
         void UpdateCenterline(Transform root, GeneratedCourse course)
         {
             if (CenterlineRenderer == null)

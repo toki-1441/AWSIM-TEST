@@ -20,6 +20,23 @@ namespace PhysicalAi.Racing
                 opponent?.SetCourse(course);
         }
 
+        /// <summary>Moves kinematic opponents with an origin shift while retaining their course progress.</summary>
+        public void Translate(Vector3 offset)
+        {
+            if (_opponents == null)
+                return;
+            foreach (var opponent in _opponents)
+            {
+                if (opponent == null)
+                    continue;
+                var body = opponent.GetComponent<Rigidbody>();
+                if (body != null)
+                    body.position += offset;
+                else
+                    opponent.transform.position += offset;
+            }
+        }
+
         public OpponentKinematics ObserveClosestOpponent()
         {
             if (_egoBody == null || _opponents == null || _opponents.Length == 0)
