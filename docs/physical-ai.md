@@ -122,7 +122,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (51 cases) and two graphics-enabled PlayMode cases pass.
+17 EditMode test files (53 cases) and two graphics-enabled PlayMode cases pass.
 The PlayMode runner keeps its generated empty bootstrap scene: the ordinary
 player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 
@@ -131,7 +131,7 @@ player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 | Combined-slip vehicle and tire model | yes | tire model | yes |
 | Vehicle specification (MAGP class TT-02) | yes | yes | yes |
 | Physics-constrained course generation | yes | yes | yes |
-| Procedural track, progress and departure | yes | yes; closed-loop lap-distance and finish-line regressions | yes |
+| Procedural track, progress and departure | yes | yes; open/closed route-distance and finish-line regressions | yes |
 | Domain randomisation | yes | yes | yes |
 | Blind-corner safe speed | yes | yes | yes |
 | Hazard spawning | yes | — | yes |
@@ -141,7 +141,7 @@ player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 | Behaviour cloning policy and trainer | yes | yes | **no model asset assigned** |
 | Demonstration recorder | yes | yes | scene-wired; recording begins only when F8 enables keyboard teleoperation |
 | Telemetry friction calibration | yes | yes | CSV conversion, scene applier and persistent fit-quality report are ready; awaiting a real-run asset |
-| Holdout evaluation | yes | evaluator | scene-wired JSON report sink records completion, lap-time and safety metrics |
+| Holdout evaluation | yes | evaluator | scene-wired JSON report sink records aggregate metrics and seed-level episode outcomes |
 | Sensor rig, planar LiDAR, TF | yes | yes | mounted, not read by any policy |
 | Rendered camera observation | yes | EditMode + graphics-enabled PlayMode | mounted; emitted to external bridges without changing vector-policy compatibility |
 

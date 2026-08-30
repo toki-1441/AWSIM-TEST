@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System;
+using System.Collections.Generic;
 using PhysicalAi.Planning;
 using UnityEngine;
 
@@ -21,6 +22,7 @@ namespace PhysicalAi.Evaluation
         bool _trainingDistribution;
         public event Action<HoldoutEvaluationReport> EvaluationCompleted;
         public bool IsTrainingDistributionSuite => _trainingDistribution;
+        public IReadOnlyList<CourseEpisodeResult> Results => _session?.Results ?? Array.Empty<CourseEpisodeResult>();
 
         void OnEnable()
         {

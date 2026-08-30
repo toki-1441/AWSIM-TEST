@@ -27,14 +27,31 @@ namespace PhysicalAi.Tests.EditMode
         {
             var root = new GameObject("ProgressTest");
             var monitor = root.AddComponent<CourseProgressMonitor>();
+            var points = new List<Vector3> { Vector3.zero, Vector3.forward, Vector3.forward * 2f };
+            var course = new GeneratedCourse(points, new List<float> { 0f, 0f, 0f }, new List<float> { 1f, 1f, 1f });
+            monitor.SetCourse(course);
+
+            monitor.UpdatePosition(course.Centerline[0]);
+            monitor.UpdatePosition(course.Centerline[1]);
+            monitor.UpdatePosition(course.Centerline[course.Centerline.Count - 1]);
+
+            Assert.That(monitor.ProgressMeters, Is.GreaterThan(0f));
+            Assert.That(monitor.DeltaProgressMeters, Is.GreaterThan(0f));
+            Assert.That(monitor.IsCompleted, Is.True);
+            Object.DestroyImmediate(root);
+        }
+
+        [Test]
+        public void UpdatePosition_OpenCourseDoesNotCompleteFromEndpointTeleport()
+        {
+            var root = new GameObject("OpenCourseTeleportTest");
+            var monitor = root.AddComponent<CourseProgressMonitor>();
             var course = PhysicsConstrainedCourseGenerator.Generate(1, CourseGenerationSettings.Default, Vector3.zero, 0f);
             monitor.SetCourse(course);
 
             monitor.UpdatePosition(course.Centerline[course.Centerline.Count - 1]);
 
-            Assert.That(monitor.ProgressMeters, Is.GreaterThan(0f));
-            Assert.That(monitor.DeltaProgressMeters, Is.EqualTo(monitor.ProgressMeters));
-            Assert.That(monitor.IsCompleted, Is.True);
+            Assert.That(monitor.IsCompleted, Is.False);
             Object.DestroyImmediate(root);
         }
 

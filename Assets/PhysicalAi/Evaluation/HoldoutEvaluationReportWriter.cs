@@ -3,6 +3,8 @@
 
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace PhysicalAi.Evaluation
@@ -25,6 +27,20 @@ namespace PhysicalAi.Evaluation
             public float blindCornerHazardCollisionRate;
             public float opponentCollisionRate;
             public float timeoutRate;
+            public EpisodeDocument[] episodes;
+        }
+
+        [Serializable]
+        sealed class EpisodeDocument
+        {
+            public int courseSeed;
+            public bool completed;
+            public float lapTimeSeconds;
+            public int collisionCount;
+            public int offCourseCount;
+            public int blindCornerHazardCollisionCount;
+            public int opponentCollisionCount;
+            public int timeoutCount;
         }
 
         void OnEnable()
@@ -46,10 +62,15 @@ namespace PhysicalAi.Evaluation
                 directory = Path.Combine(Application.persistentDataPath, "PhysicalAi");
             Directory.CreateDirectory(directory);
             var fileName = _runner != null && _runner.IsTrainingDistributionSuite ? _trainingFileName : _holdoutFileName;
-            File.WriteAllText(Path.Combine(directory, fileName), Serialize(report));
+            File.WriteAllText(Path.Combine(directory, fileName), Serialize(report, _runner?.Results));
         }
 
         public static string Serialize(HoldoutEvaluationReport report)
+        {
+            return Serialize(report, null);
+        }
+
+        public static string Serialize(HoldoutEvaluationReport report, IReadOnlyList<CourseEpisodeResult> episodes)
         {
             return JsonUtility.ToJson(new ReportDocument
             {
@@ -60,7 +81,18 @@ namespace PhysicalAi.Evaluation
                 offCourseRate = report.OffCourseRate,
                 blindCornerHazardCollisionRate = report.BlindCornerHazardCollisionRate,
                 opponentCollisionRate = report.OpponentCollisionRate,
-                timeoutRate = report.TimeoutRate
+                timeoutRate = report.TimeoutRate,
+                episodes = episodes?.Select(result => new EpisodeDocument
+                {
+                    courseSeed = result.CourseSeed,
+                    completed = result.Completed,
+                    lapTimeSeconds = result.LapTimeSeconds,
+                    collisionCount = result.CollisionCount,
+                    offCourseCount = result.OffCourseCount,
+                    blindCornerHazardCollisionCount = result.BlindCornerHazardCollisionCount,
+                    opponentCollisionCount = result.OpponentCollisionCount,
+                    timeoutCount = result.TimeoutCount
+                }).ToArray() ?? Array.Empty<EpisodeDocument>()
             }, true);
         }
 

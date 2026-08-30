@@ -32,7 +32,7 @@ the generator emits a material-assigned primitive as an explicit fallback.
 
 ## Verification
 
-Regenerating the scene compiles cleanly and the EditMode suite passes 51 cases.
+Regenerating the scene compiles cleanly and the EditMode suite passes 53 cases.
 The camera image must be inspected from a graphics-enabled player because the
 headless graphics device intentionally cannot produce a rendered frame. The two
 graphics-enabled PlayMode contracts pass in an isolated Unity test scene; the

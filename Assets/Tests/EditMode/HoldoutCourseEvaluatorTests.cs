@@ -2,6 +2,7 @@ using NUnit.Framework;
 using PhysicalAi.Evaluation;
 using PhysicalAi.Course;
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace PhysicalAi.Tests.EditMode
 {
@@ -60,6 +61,25 @@ namespace PhysicalAi.Tests.EditMode
             var result = session.CompleteEpisode(true, false, false, 2f);
 
             Assert.That(result.CourseSeed, Is.EqualTo(HoldoutCourseSuite.TrainingEvaluationSeeds[0]));
+        }
+
+        [Test]
+        public void ReportSerialization_PreservesPerEpisodeEvidence()
+        {
+            var report = HoldoutCourseEvaluator.Evaluate(new[]
+            {
+                new CourseEpisodeResult { CourseSeed = 1009, Completed = true, LapTimeSeconds = 12f },
+                new CourseEpisodeResult { CourseSeed = 2027, TimeoutCount = 1 }
+            });
+            var json = HoldoutEvaluationReportWriter.Serialize(report, new List<CourseEpisodeResult>
+            {
+                new CourseEpisodeResult { CourseSeed = 1009, Completed = true, LapTimeSeconds = 12f },
+                new CourseEpisodeResult { CourseSeed = 2027, TimeoutCount = 1 }
+            });
+
+            Assert.That(json, Does.Contain("\"episodes\""));
+            Assert.That(json, Does.Contain("\"courseSeed\": 1009"));
+            Assert.That(json, Does.Contain("\"timeoutCount\": 1"));
         }
 
         [Test]

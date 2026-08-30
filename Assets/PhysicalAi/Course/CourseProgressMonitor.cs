@@ -8,7 +8,7 @@ namespace PhysicalAi.Course
     /// <summary>Measures progress and lateral departure from a generated centerline.</summary>
     public sealed class CourseProgressMonitor : MonoBehaviour
     {
-        const float MinimumCompletedLapFraction = 0.8f;
+        const float MinimumCompletionTravelFraction = 0.8f;
         [SerializeField, Min(0.01f)] float _maximumDistanceFromCenterline = 0.45f;
         [SerializeField, Min(0.01f)] float _completionDistance = 0.1f;
 
@@ -112,20 +112,15 @@ namespace PhysicalAi.Course
             if (count == 0 || DistanceFromCenterline > _completionDistance)
                 return;
 
-            if (!_course.IsClosedLoop)
-            {
-                _completed = NearestWaypointIndex == count - 1;
-                return;
-            }
-
-            // A closed centreline can repeat point zero at its final index, and tiny
-            // floating-point closure errors can instead make its final approach the
-            // nearest point at the episode start. Neither case is proof of a lap.
-            // Completion consequently requires both meaningful travelled distance and
-            // a return to the geometric start/finish line.
-            var lapLength = _progressAtWaypoint == null ? 0f : _progressAtWaypoint[count - 1];
-            var atFinishLine = Vector3.Distance(position, _course.Centerline[0]) <= _completionDistance;
-            if (lapLength > 0f && _travelledDistanceMeters >= lapLength * MinimumCompletedLapFraction && atFinishLine)
+            // A closed centreline can repeat point zero at its final index, while an
+            // open generator may place its endpoint close to its start. A nearest
+            // waypoint alone is therefore not proof of a completed route. Every
+            // course requires meaningful travelled distance and geometric arrival at
+            // its real finish before an episode can claim success.
+            var courseLength = _progressAtWaypoint == null ? 0f : _progressAtWaypoint[count - 1];
+            var finishPoint = _course.IsClosedLoop ? _course.Centerline[0] : _course.Centerline[count - 1];
+            var atFinish = Vector3.Distance(position, finishPoint) <= _completionDistance;
+            if (courseLength > 0f && _travelledDistanceMeters >= courseLength * MinimumCompletionTravelFraction && atFinish)
                 _completed = true;
         }
 
