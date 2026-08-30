@@ -122,7 +122,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (48 cases) pass after regenerating the scene.  The two
+17 EditMode test files (49 cases) pass after regenerating the scene.  The two
 PlayMode cases are retained as the dynamics and rendered-frame contract, but the
 current batch runner cannot reach them: it enters AWSIM's default Autoware scene
 first, whose traffic-light simulator emits a continuous `NullReferenceException`.
@@ -133,7 +133,7 @@ That runner isolation defect is tracked separately from the visual scene work.
 | Combined-slip vehicle and tire model | yes | tire model | yes |
 | Vehicle specification (MAGP class TT-02) | yes | yes | yes |
 | Physics-constrained course generation | yes | yes | yes |
-| Procedural track, progress and departure | yes | yes | yes |
+| Procedural track, progress and departure | yes | yes; closed-loop finish-line regression | yes |
 | Domain randomisation | yes | yes | yes |
 | Blind-corner safe speed | yes | yes | yes |
 | Hazard spawning | yes | — | yes |

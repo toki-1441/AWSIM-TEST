@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using PhysicalAi.Course;
 using UnityEngine;
@@ -33,6 +34,33 @@ namespace PhysicalAi.Tests.EditMode
 
             Assert.That(monitor.ProgressMeters, Is.GreaterThan(0f));
             Assert.That(monitor.DeltaProgressMeters, Is.EqualTo(monitor.ProgressMeters));
+            Assert.That(monitor.IsCompleted, Is.True);
+            Object.DestroyImmediate(root);
+        }
+
+        [Test]
+        public void UpdatePosition_ClosedLoopCompletesAfterFinishApproachAndDuplicatedStartLine()
+        {
+            var root = new GameObject("ClosedLoopProgressTest");
+            var monitor = root.AddComponent<CourseProgressMonitor>();
+            var points = new List<Vector3>
+            {
+                Vector3.zero,
+                Vector3.forward,
+                new Vector3(0f, 0f, 0.1f),
+                Vector3.zero
+            };
+            var course = new GeneratedCourse(points, new List<float> { 0f, 0f, 0f, 0f }, new List<float> { 1f, 1f, 1f, 1f }, true);
+            monitor.SetCourse(course);
+
+            // The generator closes the centreline by repeating point zero. At the
+            // geometric finish, nearest-point lookup therefore returns zero, not the
+            // final index; it must still end the lap after the final approach.
+            monitor.UpdatePosition(course.Centerline[course.Centerline.Count - 2]);
+            Assert.That(monitor.IsCompleted, Is.False);
+            monitor.UpdatePosition(course.Centerline[course.Centerline.Count - 1]);
+
+            Assert.That(monitor.NearestWaypointIndex, Is.Zero);
             Assert.That(monitor.IsCompleted, Is.True);
             Object.DestroyImmediate(root);
         }

@@ -14,13 +14,14 @@ namespace PhysicalAi.Course
         GeneratedCourse _course;
         float[] _progressAtWaypoint;
         float _progressOffsetMeters;
+        bool _finishArmed;
+        bool _completed;
         public int NearestWaypointIndex { get; private set; }
         public float DistanceFromCenterline { get; private set; }
         public float ProgressMeters { get; private set; }
         public float DeltaProgressMeters { get; private set; }
         public bool IsOffCourse => DistanceFromCenterline > _maximumDistanceFromCenterline;
-        public bool IsCompleted => _course != null && _course.Centerline.Count > 0 &&
-                                   NearestWaypointIndex == _course.Centerline.Count - 1 && DistanceFromCenterline <= _completionDistance;
+        public bool IsCompleted => _completed;
 
         public void SetCourse(GeneratedCourse course)
         {
@@ -30,6 +31,8 @@ namespace PhysicalAi.Course
             ProgressMeters = 0f;
             DeltaProgressMeters = 0f;
             _progressOffsetMeters = 0f;
+            _finishArmed = false;
+            _completed = false;
             if (course == null)
             {
                 _progressAtWaypoint = null;
@@ -91,6 +94,30 @@ namespace PhysicalAi.Course
             var previousProgress = ProgressMeters;
             ProgressMeters = _progressAtWaypoint == null ? 0f : _progressOffsetMeters + _progressAtWaypoint[NearestWaypointIndex];
             DeltaProgressMeters = ProgressMeters - previousProgress;
+            UpdateCompletionState();
+        }
+
+        void UpdateCompletionState()
+        {
+            var count = _course.Centerline.Count;
+            if (count == 0 || DistanceFromCenterline > _completionDistance)
+                return;
+
+            if (!_course.IsClosedLoop)
+            {
+                _completed = NearestWaypointIndex == count - 1;
+                return;
+            }
+
+            // A closed centreline may repeat point zero as its final point. The
+            // nearest-point search resolves that tie to index zero, so checking only
+            // the final index can never complete a lap. Arm once the car reaches the
+            // final approach; then accept either representation of the finish line.
+            if (NearestWaypointIndex >= count - 2)
+                _finishArmed = true;
+            var atFinishLine = NearestWaypointIndex == 0 || NearestWaypointIndex == count - 1;
+            if (_finishArmed && atFinishLine)
+                _completed = true;
         }
 
         static float[] BuildProgress(GeneratedCourse course)
