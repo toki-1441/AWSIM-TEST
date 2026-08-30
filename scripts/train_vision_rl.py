@@ -52,10 +52,17 @@ class VisionPolicy(nn.Module):
 
 
 class VisionReinforceTrainer:
-    def __init__(self, learning_rate, discount, device):
+    def __init__(self, learning_rate, discount, device, entropy_coefficient=0.001, baseline_decay=0.95):
         self.learning_rate, self.discount, self.device = learning_rate, discount, device
+        self.entropy_coefficient = entropy_coefficient
+        self.baseline_decay = baseline_decay
         self.policy = self.optimizer = None
         self.rollout, self.episode = [], 0
+        # Keep statistics across episodes.  Normalising returns *within* one
+        # episode makes a terminal timeout penalty largely disappear because it
+        # is shared by every action in that episode.
+        self.return_baseline = 0.0
+        self.return_scale = 1.0
 
     def _ensure_policy(self, observation):
         if self.policy is None:
@@ -74,7 +81,11 @@ class VisionReinforceTrainer:
         # sample path cancel the mean gradient in ``log_prob``.
         raw_action = distribution.sample()
         action = raw_action.clamp(-1, 1)
-        self.rollout.append({"log_probability": distribution.log_prob(raw_action).sum(), "reward": 0.0})
+        self.rollout.append({
+            "log_probability": distribution.log_prob(raw_action).sum(),
+            "entropy": distribution.entropy().sum(),
+            "reward": 0.0,
+        })
         safe_speed = observation[1] if len(observation) > 1 else 3.0
         safe_speed = safe_speed if np.isfinite(safe_speed) else 3.0
         return {
@@ -86,26 +97,37 @@ class VisionReinforceTrainer:
         if self.rollout:
             self.rollout[-1]["reward"] += float(reward)
 
-    def finish_episode(self, terminal_reward):
-        self.reward_previous(terminal_reward)
-        rewards = [entry["reward"] for entry in self.rollout]
+    def discounted_returns(self, rewards):
         returns, running = [], 0.0
         for reward in reversed(rewards):
             running = reward + self.discount * running
             returns.append(running)
         returns.reverse()
+        return returns
+
+    def finish_episode(self, terminal_reward):
+        self.reward_previous(terminal_reward)
+        rewards = [entry["reward"] for entry in self.rollout]
+        returns = self.discounted_returns(rewards)
         total_reward = sum(rewards)
         if returns:
             returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
-            returns = (returns - returns.mean()) / (returns.std(unbiased=False) + 1e-6)
-            loss = torch.stack([-entry["log_probability"] * advantage for entry, advantage in zip(self.rollout, returns)]).sum()
+            advantages = (returns - self.return_baseline) / max(0.1, self.return_scale)
+            policy_loss = torch.stack([-entry["log_probability"] * advantage for entry, advantage in zip(self.rollout, advantages)]).mean()
+            entropy_bonus = torch.stack([entry["entropy"] for entry in self.rollout]).mean()
+            loss = policy_loss - self.entropy_coefficient * entropy_bonus
             self.optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 1.0)
             self.optimizer.step()
+            return_mean = float(returns.mean().item())
+            return_deviation = float(returns.std(unbiased=False).item())
+            self.return_baseline = self.baseline_decay * self.return_baseline + (1.0 - self.baseline_decay) * return_mean
+            self.return_scale = self.baseline_decay * self.return_scale + (1.0 - self.baseline_decay) * max(0.1, return_deviation)
         self.rollout.clear()
         self.episode += 1
-        return {"episode": self.episode, "return": total_reward, "steps": len(rewards)}
+        return {"episode": self.episode, "return": total_reward, "steps": len(rewards),
+                "returnBaseline": self.return_baseline, "returnScale": self.return_scale}
 
     def save(self, path):
         if self.policy is None:
@@ -150,12 +172,13 @@ def main():
     parser.add_argument("--metrics", type=Path, default=Path("Build/physical-ai-vision-reinforce-metrics.jsonl"))
     parser.add_argument("--learning-rate", type=float, default=0.0003)
     parser.add_argument("--discount", type=float, default=0.99)
+    parser.add_argument("--entropy-coefficient", type=float, default=0.001)
     parser.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
     args = parser.parse_args()
     if args.device == "cuda" and not torch.cuda.is_available():
         raise SystemExit("--device cuda was requested but CUDA is unavailable")
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available() else args.device if args.device != "auto" else "cpu")
-    trainer = VisionReinforceTrainer(args.learning_rate, args.discount, device)
+    trainer = VisionReinforceTrainer(args.learning_rate, args.discount, device, args.entropy_coefficient)
     with TrainerServer(("127.0.0.1", args.port), Handler, trainer, args.output, args.metrics) as server:
         print(f"Visual REINFORCE trainer on 127.0.0.1:{args.port} ({device}); checkpoints -> {args.output}")
         server.serve_forever()

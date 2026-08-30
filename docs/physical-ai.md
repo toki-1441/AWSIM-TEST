@@ -106,6 +106,9 @@ PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
   scripts/run_visual_evaluation.sh Build/physical-ai-vision-reinforce.pt Build/evaluations/run-001
 
 # Train visual REINFORCE from rendered frames, then evaluate the saved checkpoint.
+# The trainer keeps a cross-episode return baseline: it deliberately does not
+# normalise each rollout independently, so timeout and collision penalties retain
+# their learning signal.
 PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
   scripts/run_vision_reinforce_training.sh Build/training/run-001 100
 
