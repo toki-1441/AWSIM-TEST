@@ -9,7 +9,7 @@ Usage: scripts/build_linux.sh [--clean] [--output <path>]
 Builds a Linux 64-bit Unity player for this project.
 
 Options:
-  --clean          Remove the output directory before building.
+  --clean          Remove only this player's executable and data directory before building.
   --output <path>  Player executable path, relative to the project root unless absolute.
   -h, --help       Show this help text.
 
@@ -46,11 +46,19 @@ if [[ "$output_path" != /* ]]; then
     output_path="${project_root}/${output_path}"
 fi
 output_dir="$(dirname "$output_path")"
+output_name="$(basename "$output_path")"
+output_stem="${output_name%%.*}"
+player_data_dir="${output_dir}/${output_stem}_Data"
 
-if [[ "$clean_output" == true && -d "$output_dir" ]]; then
-    case "$output_dir" in
-        "${project_root}"/*) rm -rf "$output_dir" ;;
-        *) echo "ERROR: refusing to remove output directory outside the project: $output_dir" >&2; exit 1 ;;
+if [[ "$clean_output" == true ]]; then
+    case "$output_path" in
+        "${project_root}"/*)
+            # Build/ also contains training checkpoints and evaluation reports. A
+            # clean player build must never erase those reproducibility artifacts.
+            rm -f "$output_path" "${output_path}.debug"
+            rm -rf "$player_data_dir"
+            ;;
+        *) echo "ERROR: refusing to remove player output outside the project: $output_path" >&2; exit 1 ;;
     esac
 fi
 mkdir -p "$output_dir"

@@ -14,6 +14,7 @@ AWSIM is the best digital twin simulator for [Autoware](https://github.com/autow
 Build a local Linux 64-bit player with:
 
 ```bash
+# --clean preserves Build/training and Build/evaluations artifacts.
 scripts/build_linux.sh --clean
 ```
 

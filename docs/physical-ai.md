@@ -60,6 +60,8 @@ The Unity Editor must be closed for any batch invocation.
 ```bash
 UNITY=~/Unity/Hub/Editor/6000.0.61f1/Editor/Unity
 
+# --clean removes only AWSIM.x86_64 and AWSIM_Data; training/evaluation artifacts
+# below Build/ are preserved.
 scripts/build_linux.sh --clean                       # Linux player -> Build/AWSIM.x86_64
 
 $UNITY -batchmode -projectPath . -runTests -testPlatform EditMode \
