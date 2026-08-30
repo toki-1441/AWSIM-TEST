@@ -34,8 +34,7 @@ the generator emits a material-assigned primitive as an explicit fallback.
 
 Regenerating the scene compiles cleanly and the EditMode suite passes 49 cases.
 The camera image must be inspected from a graphics-enabled player because the
-headless graphics device intentionally cannot produce a rendered frame. The
-repository's two PlayMode contracts are presently blocked before execution by
-AWSIM's default Autoware scene starting inside the Unity batch test runner and
-repeatedly throwing in its traffic-light simulator. This is test-runner
-isolation work, not evidence that the generated Physical AI scene is invalid.
+headless graphics device intentionally cannot produce a rendered frame. The two
+graphics-enabled PlayMode contracts pass in an isolated Unity test scene; the
+normal player bootstrap recognises `-runTests` and does not start AWSIM's
+Autoware demo during the test run.

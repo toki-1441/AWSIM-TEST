@@ -16,6 +16,12 @@ namespace PhysicalAi.Planning
         static void LoadEvaluationScene()
         {
             var arguments = Environment.GetCommandLineArgs();
+            // Unity's PlayMode runner creates its own empty bootstrap scene. Do not
+            // replace it with the regular AWSIM demo, whose runtime systems are not
+            // part of these isolated tests.
+            foreach (var argument in arguments)
+                if (argument == "-runTests")
+                    return;
             for (var index = 0; index + 1 < arguments.Length; index++)
             {
                 if (arguments[index] != EvaluationArgument) continue;
