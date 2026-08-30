@@ -129,6 +129,7 @@ class TrainerServer(socketserver.TCPServer):
 
 class Handler(socketserver.StreamRequestHandler):
     def handle(self):
+        print(f"client connected: {self.client_address[0]}:{self.client_address[1]}", flush=True)
         for raw in self.rfile:
             request = json.loads(raw)
             if request.get("type") == "step":
@@ -139,6 +140,7 @@ class Handler(socketserver.StreamRequestHandler):
                 metric = self.server.trainer.finish_episode(request.get("reward", 0.0))
                 self.server.trainer.save(self.server.checkpoint)
                 self.server.record(metric)
+                print(f"episode {metric['episode']}: return={metric['return']:.3f}, steps={metric['steps']}", flush=True)
 
 
 def main():
