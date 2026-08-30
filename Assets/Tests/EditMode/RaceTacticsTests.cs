@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Reflection;
+using PhysicalAi.Course;
 using NUnit.Framework;
 using PhysicalAi.Racing;
 using UnityEngine;
@@ -45,6 +48,27 @@ namespace PhysicalAi.Tests.EditMode
             Object.DestroyImmediate(ego);
         }
 
+        [Test]
+        public void ClosedLoopOpponent_WrapsAtTheFinishInsteadOfStopping()
+        {
+            var root = new GameObject("opponent");
+            root.AddComponent<Rigidbody>();
+            var follower = root.AddComponent<OpponentCourseFollower>();
+            SetField(follower, "_initialProgressMeters", 0f);
+            var points = new List<Vector3>
+            {
+                Vector3.zero, Vector3.forward, Vector3.forward + Vector3.right,
+                Vector3.right, Vector3.zero
+            };
+            var course = new GeneratedCourse(points, new List<float> { 0f, 0f, 0f, 0f, 0f }, new List<float> { 1f, 1f, 1f, 1f, 1f }, true);
+            follower.SetCourse(course);
+
+            Invoke(follower, "Advance", 5f);
+
+            Assert.That((int)GetField(follower, "_segment"), Is.EqualTo(1));
+            Object.DestroyImmediate(root);
+        }
+
         static RaceTacticInput DefaultInput() => new RaceTacticInput
         {
             TrackWidth = 4f,
@@ -52,5 +76,9 @@ namespace PhysicalAi.Tests.EditMode
             SafetyMargin = 0.25f,
             MinimumTimeToCollision = 2f
         };
+
+        static void SetField(object target, string name, object value) => target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(target, value);
+        static object GetField(object target, string name) => target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(target);
+        static void Invoke(object target, string name, params object[] arguments) => target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(target, arguments);
     }
 }

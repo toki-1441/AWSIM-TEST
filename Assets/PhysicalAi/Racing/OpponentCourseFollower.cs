@@ -54,8 +54,18 @@ namespace PhysicalAi.Racing
 
         void Advance(float distance)
         {
-            while (distance > 0f && _course != null && _segment < _course.Centerline.Count - 1)
+            while (distance > 0f && _course != null)
             {
+                if (_segment >= _course.Centerline.Count - 1)
+                {
+                    // Fixed holdout circuits are closed. Keep the kinematic opponent
+                    // circulating so a long evaluation continues to contain genuine
+                    // head-to-head interaction instead of becoming solo driving.
+                    if (!_course.IsClosedLoop)
+                        return;
+                    _segment = 0;
+                    _distanceOnSegment = 0f;
+                }
                 var segmentLength = Vector3.Distance(_course.Centerline[_segment], _course.Centerline[_segment + 1]);
                 var remaining = Mathf.Max(0f, segmentLength - _distanceOnSegment);
                 var step = Mathf.Min(distance, remaining);

@@ -122,7 +122,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (49 cases) and two graphics-enabled PlayMode cases pass.
+17 EditMode test files (50 cases) and two graphics-enabled PlayMode cases pass.
 The PlayMode runner keeps its generated empty bootstrap scene: the ordinary
 player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 
@@ -135,7 +135,7 @@ player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 | Domain randomisation | yes | yes | yes |
 | Blind-corner safe speed | yes | yes | yes |
 | Hazard spawning | yes | — | yes |
-| Head-to-head opponent and tactics | yes | tactics | yes |
+| Head-to-head opponent and tactics | yes | tactics; closed-loop opponent circulation | yes |
 | Planning contract, reference policy, reward | yes | yes | yes |
 | ROS2 control input | yes | mapping | starts an idempotent AWSIM ROS2 node and subscribes; it applies only after a command arrives |
 | Behaviour cloning policy and trainer | yes | yes | **no model asset assigned** |
