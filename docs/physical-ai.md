@@ -122,7 +122,11 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (48 cases) and 2 PlayMode cases are passing.
+17 EditMode test files (48 cases) pass after regenerating the scene.  The two
+PlayMode cases are retained as the dynamics and rendered-frame contract, but the
+current batch runner cannot reach them: it enters AWSIM's default Autoware scene
+first, whose traffic-light simulator emits a continuous `NullReferenceException`.
+That runner isolation defect is tracked separately from the visual scene work.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
@@ -141,7 +145,7 @@ asserts the wiring.
 | Telemetry friction calibration | yes | yes | CSV conversion, scene applier and persistent fit-quality report are ready; awaiting a real-run asset |
 | Holdout evaluation | yes | evaluator | scene-wired JSON report sink records completion, lap-time and safety metrics |
 | Sensor rig, planar LiDAR, TF | yes | yes | mounted, not read by any policy |
-| Rendered camera observation | yes | EditMode + PlayMode | mounted; emitted to external bridges without changing vector-policy compatibility |
+| Rendered camera observation | yes | EditMode; PlayMode runner blocked by AWSIM default-scene startup | mounted; emitted to external bridges without changing vector-policy compatibility |
 
 ## Against the goals
 
@@ -189,4 +193,5 @@ learning signal accumulated over inconsistent physics is silently wrong.
 - [Vehicle model](physical-ai-vehicle-model.md) — MAGP regulations, the adopted TT-02
   parameter set, and the provenance of every value.
 - [Offline behaviour cloning](physical-ai-bc.md) — recording format and the training script.
+- [Course and vehicle visuals](physical-ai-visuals.md) — reproducible HDRP lighting, materials and scale vehicle rendering.
 - [Readiness audit](physical-ai-readiness.md) — required evidence before the simulator goal can be claimed complete.

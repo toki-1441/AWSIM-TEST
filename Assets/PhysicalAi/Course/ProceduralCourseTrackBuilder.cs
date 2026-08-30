@@ -14,6 +14,14 @@ namespace PhysicalAi.Course
         [SerializeField, Min(0.01f)] float _wallThickness = 0.04f;
         [SerializeField] Transform _trackRoot;
 
+        [Header("Appearance")]
+        [SerializeField] Material _roadMaterial;
+        [SerializeField] Material _wallPrimaryMaterial;
+        [SerializeField] Material _wallAlternateMaterial;
+        [SerializeField] Material _courseLineMaterial;
+        /// <summary>Segments per duct stripe. MAGP walls are built from alternating red and white duct.</summary>
+        [SerializeField, Min(1)] int _wallStripeSegments = 3;
+
         public int SegmentCount { get; private set; }
         public LineRenderer CenterlineRenderer { get; private set; }
 
@@ -47,8 +55,10 @@ namespace PhysicalAi.Course
                 segment.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
                 segment.transform.localScale = new Vector3(_roadWidth, _roadThickness, length + 0.05f);
                 segment.AddComponent<CourseTrackSegment>().Configure(index, true);
-                CreateBoundary(root, $"BoundaryLeft-{SegmentCount:D4}", (start + end) * 0.5f + Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length).Configure(index, false);
-                CreateBoundary(root, $"BoundaryRight-{SegmentCount:D4}", (start + end) * 0.5f - Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length).Configure(index, false);
+                Paint(segment, _roadMaterial);
+                var wallMaterial = SegmentCount / _wallStripeSegments % 2 == 0 ? _wallPrimaryMaterial : _wallAlternateMaterial;
+                CreateBoundary(root, $"BoundaryLeft-{SegmentCount:D4}", (start + end) * 0.5f + Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length, wallMaterial).Configure(index, false);
+                CreateBoundary(root, $"BoundaryRight-{SegmentCount:D4}", (start + end) * 0.5f - Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length, wallMaterial).Configure(index, false);
                 SegmentCount++;
             }
         }
@@ -117,9 +127,12 @@ namespace PhysicalAi.Course
                 CenterlineRenderer.startWidth = 0.025f;
                 CenterlineRenderer.endWidth = 0.025f;
                 CenterlineRenderer.numCornerVertices = 2;
-                CenterlineRenderer.material = new Material(Shader.Find("Sprites/Default"));
-                CenterlineRenderer.startColor = Color.yellow;
-                CenterlineRenderer.endColor = Color.yellow;
+                // The line carries the regulation floor-marking colour in its material.
+                // A built-in-pipeline shader such as Sprites/Default renders as HDRP's
+                // magenta error fallback, so an assigned asset is used when available.
+                CenterlineRenderer.sharedMaterial = _courseLineMaterial != null ? _courseLineMaterial : CreateFallbackLineMaterial();
+                CenterlineRenderer.startColor = Color.white;
+                CenterlineRenderer.endColor = Color.white;
             }
             var line = CenterlineRenderer;
             line.positionCount = course.Centerline.Count;
@@ -128,7 +141,7 @@ namespace PhysicalAi.Course
             CenterlineRenderer = line;
         }
 
-        CourseTrackSegment CreateBoundary(Transform root, string name, Vector3 position, Vector3 direction, float length)
+        CourseTrackSegment CreateBoundary(Transform root, string name, Vector3 position, Vector3 direction, float length, Material material)
         {
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             wall.name = name;
@@ -137,7 +150,28 @@ namespace PhysicalAi.Course
             wall.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
             wall.transform.localScale = new Vector3(_wallThickness, _wallHeight, length + _wallThickness);
             wall.AddComponent<CourseBoundary>();
+            Paint(wall, material);
             return wall.AddComponent<CourseTrackSegment>();
+        }
+
+        static Material CreateFallbackLineMaterial()
+        {
+            var shader = Shader.Find("HDRP/Unlit") ?? Shader.Find("Sprites/Default");
+            if (shader == null)
+                return null;
+            var material = new Material(shader) { name = "CourseLineFallback" };
+            if (material.HasProperty("_UnlitColor"))
+                material.SetColor("_UnlitColor", Color.yellow);
+            return material;
+        }
+
+        static void Paint(GameObject target, Material material)
+        {
+            if (material == null)
+                return;
+            var renderer = target.GetComponent<MeshRenderer>();
+            if (renderer != null)
+                renderer.sharedMaterial = material;
         }
     }
 }
