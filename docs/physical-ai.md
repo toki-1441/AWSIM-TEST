@@ -108,7 +108,8 @@ PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
 # Train visual REINFORCE from rendered frames, then evaluate the saved checkpoint.
 # The trainer keeps a cross-episode return baseline: it deliberately does not
 # normalise each rollout independently, so timeout and collision penalties retain
-# their learning signal.
+# their learning signal. Each round uses a separate deterministic training-only
+# seed batch; fixed training and holdout seeds remain evaluation-only.
 PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
   scripts/run_vision_reinforce_training.sh Build/training/run-001 100
 
@@ -127,7 +128,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (54 cases) and two graphics-enabled PlayMode cases pass.
+17 EditMode test files (55 cases) and two graphics-enabled PlayMode cases pass.
 The PlayMode runner keeps its generated empty bootstrap scene: the ordinary
 player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 

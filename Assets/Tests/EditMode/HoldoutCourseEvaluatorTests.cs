@@ -36,6 +36,18 @@ namespace PhysicalAi.Tests.EditMode
         }
 
         [Test]
+        public void TrainingRolloutSeeds_AreReproducibleAndSeparateFromEvaluationSets()
+        {
+            var firstRound = HoldoutCourseSuite.TrainingRolloutSeeds(3, 4);
+
+            Assert.That(firstRound, Is.EqualTo(HoldoutCourseSuite.TrainingRolloutSeeds(3, 4)));
+            Assert.That(firstRound, Is.Not.EqualTo(HoldoutCourseSuite.TrainingRolloutSeeds(4, 4)));
+            Assert.That(firstRound, Is.All.GreaterThan(1000));
+            Assert.That(firstRound, Has.None.EqualTo(HoldoutCourseSuite.TrainingEvaluationSeeds[0]));
+            Assert.That(firstRound, Has.None.EqualTo(HoldoutCourseSuite.Seeds[0]));
+        }
+
+        [Test]
         public void Session_RejectsTrainingSeedsAndBuildsRuntimeResults()
         {
             var session = new HoldoutEvaluationSession();

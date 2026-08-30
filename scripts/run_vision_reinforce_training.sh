@@ -37,7 +37,8 @@ trap cleanup EXIT
 sleep 1
 for round in $(seq 1 "$rounds"); do
   echo "training round $round/$rounds"
-  "$player" -batchmode -physicalAiRlPort "$port" -physicalAiEvaluation training \
+  "$player" -batchmode -physicalAiRlPort "$port" -physicalAiEvaluation rollout \
+    -physicalAiTrainingRound "$round" \
     -physicalAiMaximumEpisodeSeconds "$maximum_seconds" \
     -physicalAiQuitAfterEvaluation \
     -logFile "$output_directory/training-$round.log"

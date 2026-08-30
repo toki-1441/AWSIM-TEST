@@ -17,6 +17,7 @@ namespace PhysicalAi.Evaluation
 
         HoldoutEvaluationSession _session;
         int _nextSeedIndex;
+        IReadOnlyList<int> _seeds;
         float _episodeStartTime;
         bool _timedOut;
         bool _trainingDistribution;
@@ -42,6 +43,8 @@ namespace PhysicalAi.Evaluation
                 RunSuite();
             else if (evaluation == "training")
                 RunTrainingSuite();
+            else if (evaluation == "rollout")
+                RunTrainingRollouts();
             else if (_runOnStart)
                 RunSuite();
         }
@@ -63,19 +66,30 @@ namespace PhysicalAi.Evaluation
 
         public void RunSuite()
         {
-            Run(false);
+            Run(false, HoldoutCourseSuite.Seeds);
         }
 
         public void RunTrainingSuite()
         {
-            Run(true);
+            Run(true, HoldoutCourseSuite.TrainingEvaluationSeeds);
         }
 
-        void Run(bool trainingDistribution)
+        /// <summary>Runs a unique, reproducible training batch for one RL round.</summary>
+        public void RunTrainingRollouts()
+        {
+            var round = GetCommandLineInt("-physicalAiTrainingRound", 0);
+            var count = GetCommandLineInt("-physicalAiEpisodeCount", HoldoutCourseSuite.TrainingEvaluationSeeds.Length);
+            Run(true, HoldoutCourseSuite.TrainingRolloutSeeds(round, count));
+        }
+
+        void Run(bool trainingDistribution, IReadOnlyList<int> seeds)
         {
             if (_orchestrator == null)
                 throw new InvalidOperationException("Assign a PhysicalAiEpisodeOrchestrator before running evaluation.");
+            if (seeds == null || seeds.Count == 0)
+                throw new ArgumentException("At least one episode seed is required.", nameof(seeds));
             _trainingDistribution = trainingDistribution;
+            _seeds = seeds;
             _session = new HoldoutEvaluationSession(!trainingDistribution);
             _nextSeedIndex = 0;
             _timedOut = false;
@@ -84,15 +98,14 @@ namespace PhysicalAi.Evaluation
 
         void StartNextEpisode()
         {
-            var seeds = _trainingDistribution ? HoldoutCourseSuite.TrainingEvaluationSeeds : HoldoutCourseSuite.Seeds;
-            if (_nextSeedIndex >= seeds.Length)
+            if (_nextSeedIndex >= _seeds.Count)
             {
                 EvaluationCompleted?.Invoke(_session.BuildReport());
                 if (GetCommandLineArg("-physicalAiQuitAfterEvaluation") != null)
                     Application.Quit();
                 return;
             }
-            var seed = seeds[_nextSeedIndex++];
+            var seed = _seeds[_nextSeedIndex++];
             _episodeStartTime = Time.time;
             _timedOut = false;
             _session.BeginEpisode(seed, _episodeStartTime);
@@ -115,6 +128,12 @@ namespace PhysicalAi.Evaluation
             for (var index = 0; index + 1 < arguments.Length; index++)
                 if (arguments[index] == parameter) return arguments[index + 1];
             return null;
+        }
+
+        static int GetCommandLineInt(string parameter, int fallback)
+        {
+            var value = GetCommandLineArg(parameter);
+            return int.TryParse(value, out var parsed) && parsed > 0 ? parsed : fallback;
         }
     }
 }
