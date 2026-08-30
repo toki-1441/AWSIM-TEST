@@ -128,7 +128,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (55 cases) and two graphics-enabled PlayMode cases pass.
+17 EditMode test files (58 cases) and two graphics-enabled PlayMode cases pass.
 The PlayMode runner keeps its generated empty bootstrap scene: the ordinary
 player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 
@@ -142,7 +142,7 @@ player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 | Blind-corner safe speed | yes | yes | yes |
 | Hazard spawning | yes | — | yes |
 | Head-to-head opponent and tactics | yes | tactics; closed-loop opponent circulation | yes |
-| Planning contract, reference policy, reward | yes | yes; timeout has an explicit terminal penalty | yes |
+| Planning contract, reference policy, reward | yes | yes; timeout has an explicit terminal penalty and classical 0.4 m look-ahead | yes |
 | ROS2 control input | yes | mapping | starts an idempotent AWSIM ROS2 node and subscribes; it applies only after a command arrives |
 | Behaviour cloning policy and trainer | yes | yes | **no model asset assigned** |
 | Demonstration recorder | yes | yes | scene-wired; recording begins only when F8 enables keyboard teleoperation |
@@ -158,7 +158,7 @@ Measured against the [goals document](physical-ai-goals.md):
 | Goal | State |
 | --- | --- |
 | Physical consistency — friction circle, feasibility-checked generation, randomised μ | **met**: combined-slip Pacejka, `CoursePhysicsConstraints` gates generation, `DomainRandomizer` varies friction |
-| Relative, non-absolute observation | **met**: `RelativeCourseObservation` encodes ego-local waypoints and curvature |
+| Relative, non-absolute observation | **met**: `RelativeCourseObservation` encodes ego-local waypoints and curvature over a 2.5 m planning horizon |
 | Head-to-head interaction | met structurally: opponent, relative kinematics, tactics |
 | Hazards beyond blind corners | met: probabilistic, camera-visibility-driven spawning |
 | Swappable sensor mounts, mandatory TF sensor | met: `SensorMount`, `SensorRig`, `TransformFrameSensor` |

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using PhysicalAi.Planning;
 using UnityEngine;
@@ -31,8 +32,12 @@ namespace PhysicalAi.Evaluation
                 _orchestrator.EpisodeFinished += OnEpisodeFinished;
         }
 
-        void Start()
+        IEnumerator Start()
         {
+            // The orchestrator also initializes in Start.  Evaluation must reset
+            // its finite course after that initialization, otherwise Unity's
+            // unspecified Start ordering can restore the streaming training map.
+            yield return null;
             // Player builds can run a reproducible suite without editing the scene:
             // -physicalAiEvaluation holdout | training.
             var maximumSeconds = GetCommandLineArg("-physicalAiMaximumEpisodeSeconds");
@@ -118,7 +123,8 @@ namespace PhysicalAi.Evaluation
             if (_session == null || !_session.HasActiveEpisode)
                 return;
             _session.CompleteEpisode(completed, collision, offCourse, Time.time,
-                _orchestrator.LastCollisionWasBlindCornerHazard, _orchestrator.LastCollisionWasOpponent, _timedOut);
+                _orchestrator.LastCollisionWasBlindCornerHazard, _orchestrator.LastCollisionWasOpponent, _timedOut,
+                _orchestrator.ProgressMeters, _orchestrator.DistanceFromCenterline);
             StartNextEpisode();
         }
 

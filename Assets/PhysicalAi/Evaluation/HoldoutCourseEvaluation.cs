@@ -45,6 +45,8 @@ namespace PhysicalAi.Evaluation
         public int BlindCornerHazardCollisionCount;
         public int OpponentCollisionCount;
         public int TimeoutCount;
+        public float ProgressMeters;
+        public float DistanceFromCenterline;
     }
 
     public readonly struct HoldoutEvaluationReport

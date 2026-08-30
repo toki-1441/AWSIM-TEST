@@ -86,13 +86,13 @@ namespace PhysicalAi.Course
             if (_course == null || _course.Centerline.Count == 0)
                 return;
             if (_hasPreviousPosition)
-                _travelledDistanceMeters += Vector3.Distance(position, _previousPosition);
+                _travelledDistanceMeters += PlanarDistance(position, _previousPosition);
             _previousPosition = position;
             _hasPreviousPosition = true;
             var nearestDistanceSquared = float.PositiveInfinity;
             for (var index = 0; index < _course.Centerline.Count; index++)
             {
-                var distanceSquared = (position - _course.Centerline[index]).sqrMagnitude;
+                var distanceSquared = PlanarDistanceSquared(position, _course.Centerline[index]);
                 if (distanceSquared < nearestDistanceSquared)
                 {
                     nearestDistanceSquared = distanceSquared;
@@ -109,7 +109,7 @@ namespace PhysicalAi.Course
         void UpdateCompletionState(Vector3 position)
         {
             var count = _course.Centerline.Count;
-            if (count == 0 || DistanceFromCenterline > _completionDistance)
+            if (count == 0)
                 return;
 
             // A closed centreline can repeat point zero at its final index, while an
@@ -118,10 +118,25 @@ namespace PhysicalAi.Course
             // course requires meaningful travelled distance and geometric arrival at
             // its real finish before an episode can claim success.
             var courseLength = _progressAtWaypoint == null ? 0f : _progressAtWaypoint[count - 1];
-            var finishPoint = _course.IsClosedLoop ? _course.Centerline[0] : _course.Centerline[count - 1];
-            var atFinish = Vector3.Distance(position, finishPoint) <= _completionDistance;
+            // A closed loop needs a precise start-line arrival; an open course
+            // instead has a finish line at its final sample. Requiring a moving
+            // vehicle to stop within 10 cm of that endpoint turns a valid finish
+            // crossing into an off-course result.
+            var atFinish = _course.IsClosedLoop
+                ? PlanarDistance(position, _course.Centerline[0]) <= _completionDistance
+                : NearestWaypointIndex == count - 1 && DistanceFromCenterline <= _maximumDistanceFromCenterline;
             if (courseLength > 0f && _travelledDistanceMeters >= courseLength * MinimumCompletionTravelFraction && atFinish)
                 _completed = true;
+        }
+
+        // The generated racing course is planar. Vehicle suspension and contact
+        // response legitimately change Y, none of which is lateral departure.
+        static float PlanarDistance(Vector3 first, Vector3 second) => Mathf.Sqrt(PlanarDistanceSquared(first, second));
+
+        static float PlanarDistanceSquared(Vector3 first, Vector3 second)
+        {
+            var delta = first - second;
+            return delta.x * delta.x + delta.z * delta.z;
         }
 
         static float[] BuildProgress(GeneratedCourse course)

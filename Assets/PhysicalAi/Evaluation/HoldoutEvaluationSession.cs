@@ -31,7 +31,7 @@ namespace PhysicalAi.Evaluation
             _active = true;
         }
 
-        public CourseEpisodeResult CompleteEpisode(bool completed, bool collision, bool offCourse, float endTimeSeconds, bool blindCornerHazardCollision = false, bool opponentCollision = false, bool timedOut = false)
+        public CourseEpisodeResult CompleteEpisode(bool completed, bool collision, bool offCourse, float endTimeSeconds, bool blindCornerHazardCollision = false, bool opponentCollision = false, bool timedOut = false, float progressMeters = 0f, float distanceFromCenterline = 0f)
         {
             if (!_active)
                 throw new InvalidOperationException("No active holdout episode.");
@@ -44,7 +44,9 @@ namespace PhysicalAi.Evaluation
                 OffCourseCount = offCourse ? 1 : 0,
                 BlindCornerHazardCollisionCount = blindCornerHazardCollision ? 1 : 0,
                 OpponentCollisionCount = opponentCollision ? 1 : 0
-                , TimeoutCount = timedOut ? 1 : 0
+                , TimeoutCount = timedOut ? 1 : 0,
+                ProgressMeters = Math.Max(0f, progressMeters),
+                DistanceFromCenterline = Math.Max(0f, distanceFromCenterline)
             };
             _results.Add(result);
             _active = false;

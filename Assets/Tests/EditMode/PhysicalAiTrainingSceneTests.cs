@@ -7,6 +7,7 @@ using PhysicalAi.Calibration;
 using PhysicalAi.Racing;
 using PhysicalAi.Safety;
 using PhysicalAi.VehicleDynamics;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
@@ -28,7 +29,8 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(vehicle.GetComponent<Rigidbody>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<PlanningLowLevelController>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<BehaviorCloningPolicy>(), Is.Not.Null);
-            Assert.That(vehicle.GetComponent<PhysicalAiEpisodeOrchestrator>(), Is.Not.Null);
+            var orchestrator = vehicle.GetComponent<PhysicalAiEpisodeOrchestrator>();
+            Assert.That(orchestrator, Is.Not.Null);
             Assert.That(vehicle.GetComponent<HoldoutEvaluationRunner>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<HeadToHeadScenario>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent<BlindCornerHazardSpawner>(), Is.Not.Null);
@@ -46,6 +48,7 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(Object.FindFirstObjectByType<PlanarLidarSensor>().transform.position.y, Is.LessThan(0.08f));
             Assert.That(Object.FindFirstObjectByType<TransformFrameSensor>(), Is.Not.Null);
             Assert.That(vehicle.GetComponent("PhysicalAi.Ros2.CombinedSlipVehicleRos2Input"), Is.Not.Null);
+            Assert.That(new SerializedObject(orchestrator).FindProperty("_observationWaypointStride").intValue, Is.EqualTo(5));
             Assert.That(Object.FindFirstObjectByType<Camera>(), Is.Not.Null);
         }
     }

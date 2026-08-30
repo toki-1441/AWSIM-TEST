@@ -122,6 +122,7 @@ namespace PhysicalAi.Editor
             SetReference(orchestrator, "_trackBuilder", track);
             SetReference(orchestrator, "_progressMonitor", progress);
             SetReference(orchestrator, "_headToHeadScenario", headToHead);
+            SetInteger(orchestrator, "_observationWaypointStride", 5);
             SetReference(holdoutEvaluator, "_orchestrator", orchestrator);
             SetReference(teleoperation, "_orchestrator", orchestrator);
             SetReference(teleoperation, "_recorder", demonstrationRecorder);
@@ -276,6 +277,13 @@ namespace PhysicalAi.Editor
         {
             var serialized = new SerializedObject(target);
             serialized.FindProperty(propertyName).boolValue = value;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void SetInteger(Object target, string propertyName, int value)
+        {
+            var serialized = new SerializedObject(target);
+            serialized.FindProperty(propertyName).intValue = value;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

@@ -41,6 +41,8 @@ namespace PhysicalAi.Evaluation
             public int blindCornerHazardCollisionCount;
             public int opponentCollisionCount;
             public int timeoutCount;
+            public float progressMeters;
+            public float distanceFromCenterline;
         }
 
         void OnEnable()
@@ -91,7 +93,9 @@ namespace PhysicalAi.Evaluation
                     offCourseCount = result.OffCourseCount,
                     blindCornerHazardCollisionCount = result.BlindCornerHazardCollisionCount,
                     opponentCollisionCount = result.OpponentCollisionCount,
-                    timeoutCount = result.TimeoutCount
+                    timeoutCount = result.TimeoutCount,
+                    progressMeters = result.ProgressMeters,
+                    distanceFromCenterline = result.DistanceFromCenterline
                 }).ToArray() ?? Array.Empty<EpisodeDocument>()
             }, true);
         }

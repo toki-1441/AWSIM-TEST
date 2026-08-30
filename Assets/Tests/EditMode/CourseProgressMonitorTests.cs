@@ -23,6 +23,20 @@ namespace PhysicalAi.Tests.EditMode
         }
 
         [Test]
+        public void UpdatePosition_IgnoresSuspensionHeightWhenMeasuringDeparture()
+        {
+            var root = new GameObject("PlanarProgressTest");
+            var monitor = root.AddComponent<CourseProgressMonitor>();
+            monitor.SetCourse(PhysicsConstrainedCourseGenerator.Generate(1, CourseGenerationSettings.Default, Vector3.zero, 0f));
+
+            monitor.UpdatePosition(new Vector3(0f, 2f, 0f));
+
+            Assert.That(monitor.DistanceFromCenterline, Is.Zero.Within(0.0001f));
+            Assert.That(monitor.IsOffCourse, Is.False);
+            Object.DestroyImmediate(root);
+        }
+
+        [Test]
         public void UpdatePosition_TracksProgressAndRecognizesTheFinish()
         {
             var root = new GameObject("ProgressTest");
@@ -37,6 +51,22 @@ namespace PhysicalAi.Tests.EditMode
 
             Assert.That(monitor.ProgressMeters, Is.GreaterThan(0f));
             Assert.That(monitor.DeltaProgressMeters, Is.GreaterThan(0f));
+            Assert.That(monitor.IsCompleted, Is.True);
+            Object.DestroyImmediate(root);
+        }
+
+        [Test]
+        public void UpdatePosition_OpenCourseCompletesWhenCrossingFinishWithinRoadWidth()
+        {
+            var root = new GameObject("OpenFinishLineTest");
+            var monitor = root.AddComponent<CourseProgressMonitor>();
+            var points = new List<Vector3> { Vector3.zero, Vector3.forward * 2f };
+            monitor.SetCourse(new GeneratedCourse(points, new List<float> { 0f, 0f }, new List<float> { 1f, 1f }));
+
+            monitor.UpdatePosition(points[0]);
+            monitor.UpdatePosition(new Vector3(0.4f, 0f, 2f));
+
+            Assert.That(monitor.IsOffCourse, Is.False);
             Assert.That(monitor.IsCompleted, Is.True);
             Object.DestroyImmediate(root);
         }

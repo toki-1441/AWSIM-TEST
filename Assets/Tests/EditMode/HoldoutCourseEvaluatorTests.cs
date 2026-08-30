@@ -54,7 +54,7 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(() => session.BeginEpisode(42, 1f), Throws.ArgumentException);
 
             session.BeginEpisode(1009, 4f);
-            var result = session.CompleteEpisode(true, true, false, 15f, true, true, true);
+            var result = session.CompleteEpisode(true, true, false, 15f, true, true, true, 12.5f, 0.2f);
 
             Assert.That(result.CourseSeed, Is.EqualTo(1009));
             Assert.That(result.LapTimeSeconds, Is.EqualTo(11f));
@@ -62,6 +62,8 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(result.BlindCornerHazardCollisionCount, Is.EqualTo(1));
             Assert.That(result.OpponentCollisionCount, Is.EqualTo(1));
             Assert.That(result.TimeoutCount, Is.EqualTo(1));
+            Assert.That(result.ProgressMeters, Is.EqualTo(12.5f));
+            Assert.That(result.DistanceFromCenterline, Is.EqualTo(0.2f));
             Assert.That(session.BuildReport().CompletionRate, Is.EqualTo(1f));
         }
 
@@ -92,6 +94,7 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(json, Does.Contain("\"episodes\""));
             Assert.That(json, Does.Contain("\"courseSeed\": 1009"));
             Assert.That(json, Does.Contain("\"timeoutCount\": 1"));
+            Assert.That(json, Does.Contain("\"progressMeters\": 0.0"));
         }
 
         [Test]

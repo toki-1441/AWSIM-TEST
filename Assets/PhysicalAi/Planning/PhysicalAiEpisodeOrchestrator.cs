@@ -41,6 +41,10 @@ namespace PhysicalAi.Planning
         [SerializeField] CourseGenerationSettings _courseSettings = default;
         [SerializeField] int _episodeSeed = 1;
         [SerializeField, Min(1)] int _observationWaypointCount = 6;
+        // A 0.1 m course sample is appropriate for track construction but too
+        // near for planning at racing speed. Six features at this stride span
+        // 2.5 m without changing the observation layout contract.
+        [SerializeField, Min(1)] int _observationWaypointStride = 5;
         [SerializeField, Min(0.01f)] float _trackHalfWidth = 0.5f;
         [SerializeField, Min(0.01f)] float _reactionTime = 0.5f;
         [SerializeField, Min(0.01f)] float _maximumDeceleration = 6f;
@@ -65,6 +69,8 @@ namespace PhysicalAi.Planning
         public Func<PlanningObservation, PlanningCommand> CommandProvider;
         public GeneratedCourse Course => _course;
         public int EpisodeSeed => _episodeSeed;
+        public float ProgressMeters => _progressMonitor == null ? 0f : _progressMonitor.ProgressMeters;
+        public float DistanceFromCenterline => _progressMonitor == null ? 0f : _progressMonitor.DistanceFromCenterline;
 
         void Awake()
         {
@@ -164,7 +170,7 @@ namespace PhysicalAi.Planning
             }
 
             var waypointIndex = FindNearestWaypoint(_rigidbody.position);
-            var waypoints = RelativeCourseObservation.Encode(_course, _rigidbody.position, _rigidbody.rotation, waypointIndex, _observationWaypointCount);
+            var waypoints = RelativeCourseObservation.Encode(_course, _rigidbody.position, _rigidbody.rotation, waypointIndex, _observationWaypointCount, _observationWaypointStride);
             var visibleDistance = MeasureVisibleDistance();
             var opponent = _headToHeadScenario == null ? default : _headToHeadScenario.ObserveClosestOpponent();
             var observation = PlanningObservationEncoder.Encode(
@@ -183,7 +189,7 @@ namespace PhysicalAi.Planning
             }
 
             var command = ChooseCommand(observation, waypoints);
-            var target = waypoints.Length == 0 ? default : waypoints[Mathf.Min(1, waypoints.Length - 1)];
+            var target = waypoints.Length == 0 ? default : waypoints[Mathf.Min(ReferencePlanningPolicy.LookAheadWaypointIndex, waypoints.Length - 1)];
             var headingError = waypoints.Length == 0 ? 0f : Mathf.Atan2(target.LocalPosition.x, Mathf.Max(0.01f, target.LocalPosition.z));
             _lowLevelController.Apply(command, _rigidbody.linearVelocity.magnitude, headingError);
             var safeSpeed = waypoints.Length == 0 ? observation.Features[1] : waypoints[0].MaximumSafeSpeed;
