@@ -12,3 +12,9 @@ the training vehicle. It predicts desired speed and normalized lateral offset;
 the existing classical low-level controller still owns throttle, brake, and
 steering. If the model's feature count does not match the active observation
 layout, the orchestrator safely uses its reference fallback policy instead.
+
+For a reproducible bootstrap before human data is available, a player rollout
+may record the deterministic reference planner with
+`-physicalAiRecordReferenceDemonstrations`. These files are named `reference-*`
+and must remain distinguished from human teleoperation data when datasets are
+curated. The same camera-frame export and visual BC trainer accept either source.

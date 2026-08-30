@@ -39,6 +39,19 @@ namespace PhysicalAi.Planning
         public string CurrentPath { get; private set; }
         public bool RecordingEnabled => _recordingEnabled;
 
+        void Start()
+        {
+            // A reproducible reference-policy rollout can bootstrap visual BC
+            // before human teleoperation data is available. It is deliberately
+            // opt-in and uses a distinct prefix so it cannot be mistaken for a
+            // human demonstration.
+            if (HasCommandLineArgument("-physicalAiRecordReferenceDemonstrations"))
+            {
+                _filePrefix = "reference";
+                _recordingEnabled = true;
+            }
+        }
+
         public void SetRecordingEnabled(bool enabled)
         {
             if (_recordingEnabled == enabled) return;
@@ -145,6 +158,13 @@ namespace PhysicalAi.Planning
             foreach (var invalid in Path.GetInvalidFileNameChars())
                 value = value.Replace(invalid, '_');
             return string.IsNullOrWhiteSpace(value) ? "teleop" : value;
+        }
+
+        static bool HasCommandLineArgument(string parameter)
+        {
+            foreach (var argument in Environment.GetCommandLineArgs())
+                if (argument == parameter) return true;
+            return false;
         }
     }
 }

@@ -96,6 +96,8 @@ Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation training
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout
 # Optional for smoke tests only; normal reports retain the scene's 120 s limit.
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation training -physicalAiMaximumEpisodeSeconds 2
+# Record opt-in synthetic reference demonstrations (not labelled as human teleop).
+Build/AWSIM.x86_64 -physicalAiEvaluation rollout -physicalAiEpisodeCount 8 -physicalAiMaximumEpisodeSeconds 30 -physicalAiRecordReferenceDemonstrations
 # Save comparable run artifacts outside Unity's persistent-data default.
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout -physicalAiReportDirectory Build/evaluations/run-001
 # Baseline for the blind-corner safety comparison (planning ignores camera occlusion).
@@ -145,7 +147,7 @@ player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 | Planning contract, reference policy, reward | yes | yes; timeout has an explicit terminal penalty and classical 0.4 m look-ahead | yes |
 | ROS2 control input | yes | mapping | starts an idempotent AWSIM ROS2 node and subscribes; it applies only after a command arrives |
 | Behaviour cloning policy and trainer | yes | yes | **no model asset assigned** |
-| Demonstration recorder | yes | yes | scene-wired; recording begins only when F8 enables keyboard teleoperation |
+| Demonstration recorder | yes | yes | scene-wired; F8 records human teleoperation, while an explicit player flag records separately prefixed reference-policy demonstrations |
 | Telemetry friction calibration | yes | yes | CSV conversion, scene applier and persistent fit-quality report are ready; awaiting a real-run asset |
 | Holdout evaluation | yes | evaluator | scene-wired JSON report sink records aggregate metrics and seed-level episode outcomes |
 | Sensor rig, planar LiDAR, TF | yes | yes | mounted, not read by any policy |
