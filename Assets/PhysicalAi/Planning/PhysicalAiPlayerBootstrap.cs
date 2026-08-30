@@ -19,10 +19,11 @@ namespace PhysicalAi.Planning
             for (var index = 0; index + 1 < arguments.Length; index++)
             {
                 if (arguments[index] != EvaluationArgument) continue;
-                if (arguments[index + 1] != "training" && arguments[index + 1] != "holdout") return;
+                if (arguments[index + 1] != "training" && arguments[index + 1] != "holdout") break;
                 SceneManager.LoadScene("PhysicalAiTraining", LoadSceneMode.Single);
                 return;
             }
+            SceneManager.LoadScene("AutowareSimulationDemo", LoadSceneMode.Single);
         }
     }
 }
