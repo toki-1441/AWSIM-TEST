@@ -107,6 +107,10 @@ PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
 PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
   scripts/run_vision_reinforce_training.sh Build/training/run-001 100
 
+# Produce model, blind-corner, head-to-head baseline reports and the final gate result.
+PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
+  scripts/run_goal_gate.sh Build/training/run-001/physical-ai-vision-reinforce.pt Build/evaluations/gate-001
+
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
 
 python3 scripts/evaluate_goal_metrics.py --training train.json --holdout holdout.json --blind-baseline blind.json --race-baseline race.json
