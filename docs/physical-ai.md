@@ -96,6 +96,8 @@ Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation training -physicalAiMaximumEpisodeSeconds 2
 # Save comparable run artifacts outside Unity's persistent-data default.
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout -physicalAiReportDirectory Build/evaluations/run-001
+# Baseline for the blind-corner safety comparison (planning ignores camera occlusion).
+Build/AWSIM.x86_64 -physicalAiEvaluation holdout -physicalAiDisableVisibilitySafety -physicalAiReportDirectory Build/evaluations/blind-baseline
 
 # Reproducibly evaluate one saved visual checkpoint on both distributions.
 PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \

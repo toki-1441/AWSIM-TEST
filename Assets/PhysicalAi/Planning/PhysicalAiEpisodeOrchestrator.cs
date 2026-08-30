@@ -52,6 +52,7 @@ namespace PhysicalAi.Planning
         Vector3 _episodeStartPosition;
         Quaternion _episodeStartRotation;
         bool _episodeEnded;
+        bool _visibilitySafetyDisabled;
         public bool LastCollisionWasBlindCornerHazard { get; private set; }
         public bool LastCollisionWasOpponent { get; private set; }
 
@@ -72,6 +73,7 @@ namespace PhysicalAi.Planning
             _rigidbody = _vehicle != null ? _vehicle.GetComponent<Rigidbody>() : null;
             _episodeStartPosition = transform.position;
             _episodeStartRotation = transform.rotation;
+            _visibilitySafetyDisabled = HasCommandLineArgument("-physicalAiDisableVisibilitySafety");
         }
 
         void Start() => ResetEpisode(_episodeSeed);
@@ -224,7 +226,7 @@ namespace PhysicalAi.Planning
 
         float MeasureVisibleDistance()
         {
-            if (_egoCamera == null)
+            if (_visibilitySafetyDisabled || _egoCamera == null)
                 return _maximumVisibleDistance;
             return Physics.Raycast(_egoCamera.transform.position, _egoCamera.transform.forward, out var hit, _maximumVisibleDistance, ~0, QueryTriggerInteraction.Ignore)
                 ? hit.distance
@@ -291,6 +293,13 @@ namespace PhysicalAi.Planning
             if (_behaviorCloningPolicy != null && _behaviorCloningPolicy.TryPredict(observation, out var bcCommand))
                 return bcCommand;
             return ReferencePlanningPolicy.Choose(waypoints, observation.Features[1], _trackHalfWidth);
+        }
+
+        static bool HasCommandLineArgument(string parameter)
+        {
+            foreach (var argument in Environment.GetCommandLineArgs())
+                if (argument == parameter) return true;
+            return false;
         }
 
     }
