@@ -57,7 +57,7 @@ namespace PhysicalAi.Evaluation
             if (_session != null && _session.HasActiveEpisode && !_timedOut && Time.time - _episodeStartTime >= _maximumEpisodeSeconds)
             {
                 _timedOut = true;
-                _orchestrator.EndEpisode(false, false);
+                _orchestrator.EndEpisode(false, false, true);
             }
         }
 

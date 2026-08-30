@@ -30,6 +30,17 @@ namespace PhysicalAi.Tests.EditMode
         }
 
         [Test]
+        public void CalculateTerminal_TimeoutIsWorseThanSafeCompletion()
+        {
+            var completion = PlanningReward.CalculateTerminal(true, false, false, false, 0f, 4f);
+            var timeout = PlanningReward.CalculateTerminal(false, false, false, true, 0f, 4f);
+
+            Assert.That(completion, Is.EqualTo(10f));
+            Assert.That(timeout, Is.EqualTo(-5f));
+            Assert.That(timeout, Is.LessThan(completion));
+        }
+
+        [Test]
         public void BehaviorCloningInference_ProducesBoundedPlanningCommand()
         {
             var model = new BehaviorCloningModel

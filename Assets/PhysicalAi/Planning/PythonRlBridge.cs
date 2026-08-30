@@ -119,7 +119,6 @@ namespace PhysicalAi.Planning
 
         void OnEpisodeFinished(bool completed, bool collision, bool offCourse)
         {
-            _pendingReward += completed ? 10f : collision ? -20f : offCourse ? -10f : 0f;
             if (!_connected) return;
             try { _writer.WriteLine(JsonUtility.ToJson(new Request { type = "terminal", reward = _pendingReward, terminal = true })); }
             catch (IOException) { Disconnect(); }

@@ -67,5 +67,17 @@ namespace PhysicalAi.Planning
                 reward -= (speed - safeSpeed) * 2f;
             return reward;
         }
+
+        /// <summary>Terminal reward delivered exactly once at an episode boundary.</summary>
+        public static float CalculateTerminal(bool completed, bool collision, bool offCourse, bool timedOut, float speed, float safeSpeed)
+        {
+            var reward = Calculate(0f, collision, offCourse, speed, safeSpeed);
+            if (completed)
+                reward += 10f;
+            // A zero-action policy must not prefer timing out to making safe progress.
+            if (timedOut)
+                reward -= 5f;
+            return reward;
+        }
     }
 }

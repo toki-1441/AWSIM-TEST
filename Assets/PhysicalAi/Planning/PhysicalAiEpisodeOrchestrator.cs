@@ -159,7 +159,7 @@ namespace PhysicalAi.Planning
             }
             if (_progressMonitor != null && _progressMonitor.IsCompleted)
             {
-                EndEpisode(true, false, false);
+                FinishEpisode(true, false, false);
                 return;
             }
 
@@ -195,10 +195,16 @@ namespace PhysicalAi.Planning
 
         public void EndEpisode(bool collision, bool offCourse)
         {
-            EndEpisode(false, collision, offCourse);
+            FinishEpisode(false, collision, offCourse, false);
         }
 
-        void EndEpisode(bool completed, bool collision, bool offCourse)
+        /// <summary>Ends an externally managed episode, optionally recording an evaluation timeout.</summary>
+        public void EndEpisode(bool collision, bool offCourse, bool timedOut)
+        {
+            FinishEpisode(false, collision, offCourse, timedOut);
+        }
+
+        void FinishEpisode(bool completed, bool collision, bool offCourse, bool timedOut = false)
         {
             if (_episodeEnded)
                 return;
@@ -207,8 +213,9 @@ namespace PhysicalAi.Planning
             var safeSpeed = _course == null || _rigidbody == null
                 ? 0f
                 : _course.MaximumSafeSpeed[Mathf.Clamp(FindNearestWaypoint(_rigidbody.position), 0, _course.MaximumSafeSpeed.Count - 1)];
-            var reward = PlanningReward.Calculate(0f, collision, offCourse, speed, safeSpeed);
+            var reward = PlanningReward.CalculateTerminal(completed, collision, offCourse, timedOut, speed, safeSpeed);
             _demonstrationRecorder?.EndEpisode(new PlanningObservation(Array.Empty<float>()), default, reward);
+            StepRewardReady?.Invoke(reward);
             EpisodeFinished?.Invoke(completed, collision, offCourse);
         }
 
