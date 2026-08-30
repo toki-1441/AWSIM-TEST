@@ -101,19 +101,23 @@ namespace PhysicalAi.Planning
         {
             _episodeSeed = seed;
             ResetVehicleState();
-            var courseOrigin = new Vector3(transform.position.x, 0f, transform.position.z);
+            // ResetVehicleState may be called from an episode-finished callback in
+            // the same physics tick. At that point Transform can still expose the
+            // previous episode's off-course pose even though the Rigidbody has been
+            // reset. Course generation must use the authoritative reset position.
+            var courseOrigin = new Vector3(_episodeStartPosition.x, 0f, _episodeStartPosition.z);
             if (_useStreamingTraining && !useHoldoutCourse)
             {
                 _streamingCourse = new StreamingCourseState();
-                _streamingCourse.Reset(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
+                _streamingCourse.Reset(seed, _courseSettings, courseOrigin, _episodeStartRotation.eulerAngles.y);
                 _course = _streamingCourse.Course;
             }
             else
             {
                 _streamingCourse = null;
                 _course = useHoldoutCourse
-                    ? ClosedHoldoutCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y)
-                    : PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, courseOrigin, transform.eulerAngles.y);
+                    ? ClosedHoldoutCourseGenerator.Generate(seed, _courseSettings, courseOrigin, _episodeStartRotation.eulerAngles.y)
+                    : PhysicsConstrainedCourseGenerator.Generate(seed, _courseSettings, courseOrigin, _episodeStartRotation.eulerAngles.y);
             }
             _domainRandomizer?.ApplyEpisodeSeed(seed);
             _telemetryCalibrationApplier?.ApplyCalibration();
