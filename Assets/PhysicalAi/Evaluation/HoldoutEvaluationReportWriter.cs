@@ -41,7 +41,9 @@ namespace PhysicalAi.Evaluation
 
         public void Write(HoldoutEvaluationReport report)
         {
-            var directory = Path.Combine(Application.persistentDataPath, "PhysicalAi");
+            var directory = GetCommandLineArg("-physicalAiReportDirectory");
+            if (string.IsNullOrEmpty(directory))
+                directory = Path.Combine(Application.persistentDataPath, "PhysicalAi");
             Directory.CreateDirectory(directory);
             var fileName = _runner != null && _runner.IsTrainingDistributionSuite ? _trainingFileName : _holdoutFileName;
             File.WriteAllText(Path.Combine(directory, fileName), Serialize(report));
@@ -60,6 +62,14 @@ namespace PhysicalAi.Evaluation
                 opponentCollisionRate = report.OpponentCollisionRate,
                 timeoutRate = report.TimeoutRate
             }, true);
+        }
+
+        static string GetCommandLineArg(string parameter)
+        {
+            var arguments = Environment.GetCommandLineArgs();
+            for (var index = 0; index + 1 < arguments.Length; index++)
+                if (arguments[index] == parameter) return arguments[index + 1];
+            return null;
         }
     }
 }
