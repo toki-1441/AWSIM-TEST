@@ -97,6 +97,10 @@ Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation training -physic
 # Save comparable run artifacts outside Unity's persistent-data default.
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout -physicalAiReportDirectory Build/evaluations/run-001
 
+# Reproducibly evaluate one saved visual checkpoint on both distributions.
+PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
+  scripts/run_visual_evaluation.sh Build/physical-ai-vision-reinforce.pt Build/evaluations/run-001
+
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
 
 python3 scripts/evaluate_goal_metrics.py --training train.json --holdout holdout.json --blind-baseline blind.json --race-baseline race.json

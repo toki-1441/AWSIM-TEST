@@ -86,6 +86,8 @@ namespace PhysicalAi.Evaluation
             if (_nextSeedIndex >= seeds.Length)
             {
                 EvaluationCompleted?.Invoke(_session.BuildReport());
+                if (GetCommandLineArg("-physicalAiQuitAfterEvaluation") != null)
+                    Application.Quit();
                 return;
             }
             var seed = seeds[_nextSeedIndex++];
