@@ -8,13 +8,16 @@ namespace PhysicalAi.Course
     /// <summary>Measures progress and lateral departure from a generated centerline.</summary>
     public sealed class CourseProgressMonitor : MonoBehaviour
     {
+        const float MinimumCompletedLapFraction = 0.8f;
         [SerializeField, Min(0.01f)] float _maximumDistanceFromCenterline = 0.45f;
         [SerializeField, Min(0.01f)] float _completionDistance = 0.1f;
 
         GeneratedCourse _course;
         float[] _progressAtWaypoint;
         float _progressOffsetMeters;
-        bool _finishArmed;
+        Vector3 _previousPosition;
+        float _travelledDistanceMeters;
+        bool _hasPreviousPosition;
         bool _completed;
         public int NearestWaypointIndex { get; private set; }
         public float DistanceFromCenterline { get; private set; }
@@ -31,7 +34,9 @@ namespace PhysicalAi.Course
             ProgressMeters = 0f;
             DeltaProgressMeters = 0f;
             _progressOffsetMeters = 0f;
-            _finishArmed = false;
+            _previousPosition = Vector3.zero;
+            _travelledDistanceMeters = 0f;
+            _hasPreviousPosition = false;
             _completed = false;
             if (course == null)
             {
@@ -80,6 +85,10 @@ namespace PhysicalAi.Course
         {
             if (_course == null || _course.Centerline.Count == 0)
                 return;
+            if (_hasPreviousPosition)
+                _travelledDistanceMeters += Vector3.Distance(position, _previousPosition);
+            _previousPosition = position;
+            _hasPreviousPosition = true;
             var nearestDistanceSquared = float.PositiveInfinity;
             for (var index = 0; index < _course.Centerline.Count; index++)
             {
@@ -94,10 +103,10 @@ namespace PhysicalAi.Course
             var previousProgress = ProgressMeters;
             ProgressMeters = _progressAtWaypoint == null ? 0f : _progressOffsetMeters + _progressAtWaypoint[NearestWaypointIndex];
             DeltaProgressMeters = ProgressMeters - previousProgress;
-            UpdateCompletionState();
+            UpdateCompletionState(position);
         }
 
-        void UpdateCompletionState()
+        void UpdateCompletionState(Vector3 position)
         {
             var count = _course.Centerline.Count;
             if (count == 0 || DistanceFromCenterline > _completionDistance)
@@ -109,14 +118,14 @@ namespace PhysicalAi.Course
                 return;
             }
 
-            // A closed centreline may repeat point zero as its final point. The
-            // nearest-point search resolves that tie to index zero, so checking only
-            // the final index can never complete a lap. Arm once the car reaches the
-            // final approach; then accept either representation of the finish line.
-            if (NearestWaypointIndex >= count - 2)
-                _finishArmed = true;
-            var atFinishLine = NearestWaypointIndex == 0 || NearestWaypointIndex == count - 1;
-            if (_finishArmed && atFinishLine)
+            // A closed centreline can repeat point zero at its final index, and tiny
+            // floating-point closure errors can instead make its final approach the
+            // nearest point at the episode start. Neither case is proof of a lap.
+            // Completion consequently requires both meaningful travelled distance and
+            // a return to the geometric start/finish line.
+            var lapLength = _progressAtWaypoint == null ? 0f : _progressAtWaypoint[count - 1];
+            var atFinishLine = Vector3.Distance(position, _course.Centerline[0]) <= _completionDistance;
+            if (lapLength > 0f && _travelledDistanceMeters >= lapLength * MinimumCompletedLapFraction && atFinishLine)
                 _completed = true;
         }
 

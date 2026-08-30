@@ -122,7 +122,7 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (50 cases) and two graphics-enabled PlayMode cases pass.
+17 EditMode test files (51 cases) and two graphics-enabled PlayMode cases pass.
 The PlayMode runner keeps its generated empty bootstrap scene: the ordinary
 player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 
@@ -131,7 +131,7 @@ player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 | Combined-slip vehicle and tire model | yes | tire model | yes |
 | Vehicle specification (MAGP class TT-02) | yes | yes | yes |
 | Physics-constrained course generation | yes | yes | yes |
-| Procedural track, progress and departure | yes | yes; closed-loop finish-line regression | yes |
+| Procedural track, progress and departure | yes | yes; closed-loop lap-distance and finish-line regressions | yes |
 | Domain randomisation | yes | yes | yes |
 | Blind-corner safe speed | yes | yes | yes |
 | Hazard spawning | yes | — | yes |

@@ -47,21 +47,39 @@ namespace PhysicalAi.Tests.EditMode
             {
                 Vector3.zero,
                 Vector3.forward,
-                new Vector3(0f, 0f, 0.1f),
+                Vector3.forward + Vector3.right,
+                Vector3.right,
                 Vector3.zero
             };
-            var course = new GeneratedCourse(points, new List<float> { 0f, 0f, 0f, 0f }, new List<float> { 1f, 1f, 1f, 1f }, true);
+            var course = new GeneratedCourse(points, new List<float> { 0f, 0f, 0f, 0f, 0f }, new List<float> { 1f, 1f, 1f, 1f, 1f }, true);
             monitor.SetCourse(course);
 
-            // The generator closes the centreline by repeating point zero. At the
-            // geometric finish, nearest-point lookup therefore returns zero, not the
-            // final index; it must still end the lap after the final approach.
+            // The duplicated finish is accepted only after travelling around the
+            // circuit; nearest-point index alone is insufficient for a closed loop.
+            monitor.UpdatePosition(course.Centerline[0]);
+            monitor.UpdatePosition(course.Centerline[1]);
+            monitor.UpdatePosition(course.Centerline[2]);
             monitor.UpdatePosition(course.Centerline[course.Centerline.Count - 2]);
             Assert.That(monitor.IsCompleted, Is.False);
             monitor.UpdatePosition(course.Centerline[course.Centerline.Count - 1]);
 
             Assert.That(monitor.NearestWaypointIndex, Is.Zero);
             Assert.That(monitor.IsCompleted, Is.True);
+            Object.DestroyImmediate(root);
+        }
+
+        [Test]
+        public void UpdatePosition_ClosedLoopDoesNotCompleteFromStartLineTeleport()
+        {
+            var root = new GameObject("ClosedLoopStartTest");
+            var monitor = root.AddComponent<CourseProgressMonitor>();
+            var course = ClosedHoldoutCourseGenerator.Generate(1009, CourseGenerationSettings.Default, Vector3.zero, 0f);
+            monitor.SetCourse(course);
+
+            monitor.UpdatePosition(course.Centerline[course.Centerline.Count - 2]);
+            monitor.UpdatePosition(course.Centerline[0]);
+
+            Assert.That(monitor.IsCompleted, Is.False);
             Object.DestroyImmediate(root);
         }
 
