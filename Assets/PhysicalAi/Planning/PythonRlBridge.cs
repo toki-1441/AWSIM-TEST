@@ -99,7 +99,13 @@ namespace PhysicalAi.Planning
             try
             {
                 _writer.WriteLine(JsonUtility.ToJson(new Request { type = "step", observation = observation.Features, cameraJpegBase64 = _latestCameraJpeg, reward = _pendingReward, terminal = false }));
-                var response = JsonUtility.FromJson<Response>(_reader.ReadLine());
+                var line = _reader.ReadLine();
+                var response = string.IsNullOrEmpty(line) ? null : JsonUtility.FromJson<Response>(line);
+                if (response == null)
+                {
+                    Disconnect();
+                    return _lastCommand;
+                }
                 _pendingReward = 0f;
                 _lastCommand = new PlanningCommand
                 {
