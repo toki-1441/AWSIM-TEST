@@ -92,6 +92,8 @@ python3 -m venv ../.physical-ai-venv
 # Reports are written to the player persistent-data PhysicalAi/ directory.
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation training
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout
+# Optional for smoke tests only; normal reports retain the scene's 120 s limit.
+Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation training -physicalAiMaximumEpisodeSeconds 2
 
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
 

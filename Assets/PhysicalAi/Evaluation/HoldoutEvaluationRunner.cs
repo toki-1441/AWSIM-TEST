@@ -32,6 +32,9 @@ namespace PhysicalAi.Evaluation
         {
             // Player builds can run a reproducible suite without editing the scene:
             // -physicalAiEvaluation holdout | training.
+            var maximumSeconds = GetCommandLineArg("-physicalAiMaximumEpisodeSeconds");
+            if (float.TryParse(maximumSeconds, out var requestedMaximum) && requestedMaximum > 0f)
+                _maximumEpisodeSeconds = requestedMaximum;
             var evaluation = GetCommandLineArg("-physicalAiEvaluation");
             if (evaluation == "holdout")
                 RunSuite();
