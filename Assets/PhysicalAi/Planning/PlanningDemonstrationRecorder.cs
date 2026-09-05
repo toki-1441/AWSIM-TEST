@@ -18,6 +18,8 @@ namespace PhysicalAi.Planning
         public PlanningCommand Command;
         public float Reward;
         public bool Terminal;
+        /// <summary>Operator-declared scenario, retained to keep solo and race demonstrations auditable.</summary>
+        public string ScenarioLabel;
         public int CameraFrameIndex = -1;
         public string CameraJpegBase64;
     }
@@ -27,6 +29,7 @@ namespace PhysicalAi.Planning
     {
         [SerializeField] string _datasetDirectory = "PhysicalAiDemonstrations";
         [SerializeField] string _filePrefix = "teleop";
+        [SerializeField] string _scenarioLabel = "human-teleoperation";
         [SerializeField] bool _recordingEnabled;
 
         StreamWriter _writer;
@@ -38,9 +41,16 @@ namespace PhysicalAi.Planning
 
         public string CurrentPath { get; private set; }
         public bool RecordingEnabled => _recordingEnabled;
+        public string ScenarioLabel => _scenarioLabel;
 
         void Start()
         {
+            var requestedDirectory = GetCommandLineArg("-physicalAiDemonstrationDirectory");
+            if (!string.IsNullOrWhiteSpace(requestedDirectory))
+                _datasetDirectory = requestedDirectory;
+            var requestedScenario = GetCommandLineArg("-physicalAiDemonstrationScenario");
+            if (!string.IsNullOrWhiteSpace(requestedScenario))
+                _scenarioLabel = Sanitize(requestedScenario);
             // A reproducible reference-policy rollout can bootstrap visual BC
             // before human teleoperation data is available. It is deliberately
             // opt-in and uses a distinct prefix so it cannot be mistaken for a
@@ -86,6 +96,7 @@ namespace PhysicalAi.Planning
                 Observation = observation.Features,
                 Command = command,
                 Reward = reward,
+                ScenarioLabel = _scenarioLabel,
                 CameraFrameIndex = _pendingCameraFrameIndex,
                 CameraJpegBase64 = _pendingCameraJpeg,
                 Terminal = false
@@ -134,6 +145,7 @@ namespace PhysicalAi.Planning
                 Observation = observation.Features,
                 Command = command,
                 Reward = terminalReward,
+                ScenarioLabel = _scenarioLabel,
                 Terminal = true
             });
             _writer.Dispose();
@@ -165,6 +177,15 @@ namespace PhysicalAi.Planning
             foreach (var argument in Environment.GetCommandLineArgs())
                 if (argument == parameter) return true;
             return false;
+        }
+
+        static string GetCommandLineArg(string parameter)
+        {
+            var arguments = Environment.GetCommandLineArgs();
+            for (var index = 0; index + 1 < arguments.Length; index++)
+                if (arguments[index] == parameter)
+                    return arguments[index + 1];
+            return null;
         }
     }
 }

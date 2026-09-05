@@ -7,13 +7,19 @@ using UnityEngine.SceneManagement;
 
 namespace PhysicalAi.Planning
 {
-    /// <summary>Loads the generated Physical AI scene only for explicit player evaluations.</summary>
-    public static class PhysicalAiPlayerBootstrap
+    /// <summary>Chooses the scene a player build starts in.</summary>
+    /// <remarks>
+    /// This is a component in the initial build scene, rather than only a
+    /// <c>RuntimeInitializeOnLoadMethod</c>. The latter is removed by managed
+    /// stripping when its assembly has no scene reference, leaving a player in
+    /// an empty bootstrap scene and silently producing no evaluation report.
+    /// </remarks>
+    [DefaultExecutionOrder(-10000)]
+    public sealed class PhysicalAiPlayerBootstrap : MonoBehaviour
     {
-        const string EvaluationArgument = "-physicalAiEvaluation";
+        const string AutowareDemoArgument = "-physicalAiAutowareDemo";
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void LoadEvaluationScene()
+        void Awake()
         {
             var arguments = Environment.GetCommandLineArgs();
             // Unity's PlayMode runner creates its own empty bootstrap scene. Do not
@@ -22,14 +28,19 @@ namespace PhysicalAi.Planning
             foreach (var argument in arguments)
                 if (argument == "-runTests")
                     return;
-            for (var index = 0; index + 1 < arguments.Length; index++)
+
+            // The AWSIM demo needs the environment assets under Assets/Awsim/Externals,
+            // which are distributed separately and are absent from a plain checkout.
+            // Starting there by default drops the ego vehicle into an empty world, so
+            // it is opt-in and the self-contained Physical AI scene is the default.
+            foreach (var argument in arguments)
             {
-                if (arguments[index] != EvaluationArgument) continue;
-                if (arguments[index + 1] != "training" && arguments[index + 1] != "holdout" && arguments[index + 1] != "rollout") break;
-                SceneManager.LoadScene("PhysicalAiTraining", LoadSceneMode.Single);
+                if (argument != AutowareDemoArgument)
+                    continue;
+                SceneManager.LoadScene("AutowareSimulationDemo", LoadSceneMode.Single);
                 return;
             }
-            SceneManager.LoadScene("AutowareSimulationDemo", LoadSceneMode.Single);
+            SceneManager.LoadScene("PhysicalAiTraining", LoadSceneMode.Single);
         }
     }
 }

@@ -45,6 +45,9 @@ namespace PhysicalAi.Planning
         [SerializeField] TextAsset _modelAsset;
         BehaviorCloningModel _model;
 
+        /// <summary>Whether a compatible exported BC model is available for inference.</summary>
+        public bool IsReady => _model != null && _model.SpeedWeights != null && _model.LateralWeights != null;
+
         void Awake() => LoadModel();
 
         public void LoadModel()

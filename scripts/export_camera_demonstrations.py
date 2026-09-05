@@ -28,6 +28,7 @@ def export(inputs, output):
                 "desiredSpeed": frame["Command"]["DesiredSpeed"],
                 "desiredLateralOffsetNormalized": frame["Command"]["DesiredLateralOffsetNormalized"],
                 "reward": frame.get("Reward", 0.0),
+                "scenarioLabel": frame.get("ScenarioLabel", ""),
             })
     (output / "manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in manifest), encoding="utf-8")
     return len(manifest)

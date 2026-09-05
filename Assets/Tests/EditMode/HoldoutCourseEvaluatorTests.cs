@@ -14,8 +14,8 @@ namespace PhysicalAi.Tests.EditMode
             var report = HoldoutCourseEvaluator.Evaluate(new[]
             {
                 new CourseEpisodeResult { CourseSeed = 1009, Completed = true, LapTimeSeconds = 10f },
-                new CourseEpisodeResult { CourseSeed = 2027, Completed = true, LapTimeSeconds = 14f, CollisionCount = 1, BlindCornerHazardCollisionCount = 1 },
-                new CourseEpisodeResult { CourseSeed = 3037, Completed = false, OffCourseCount = 1, OpponentCollisionCount = 1, TimeoutCount = 1 }
+                new CourseEpisodeResult { CourseSeed = 2027, Completed = true, LapTimeSeconds = 14f, CollisionCount = 1, BlindCornerHazardCollisionCount = 1, HazardWasSpawned = true },
+                new CourseEpisodeResult { CourseSeed = 3037, Completed = false, OffCourseCount = 1, OpponentCollisionCount = 1, TimeoutCount = 1, EgoOvertakeCount = 1, OpponentOvertakeCount = 1 }
             });
 
             Assert.That(report.CompletionRate, Is.EqualTo(2f / 3f).Within(0.001f));
@@ -23,8 +23,11 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(report.CollisionRate, Is.EqualTo(1f / 3f).Within(0.001f));
             Assert.That(report.OffCourseRate, Is.EqualTo(1f / 3f).Within(0.001f));
             Assert.That(report.BlindCornerHazardCollisionRate, Is.EqualTo(1f / 3f).Within(0.001f));
+            Assert.That(report.HazardEpisodeRate, Is.EqualTo(1f / 3f).Within(0.001f));
             Assert.That(report.OpponentCollisionRate, Is.EqualTo(1f / 3f).Within(0.001f));
             Assert.That(report.TimeoutRate, Is.EqualTo(1f / 3f).Within(0.001f));
+            Assert.That(report.EgoOvertakeRate, Is.EqualTo(1f / 3f).Within(0.001f));
+            Assert.That(report.OpponentOvertakeRate, Is.EqualTo(1f / 3f).Within(0.001f));
         }
 
         [Test]
@@ -83,17 +86,23 @@ namespace PhysicalAi.Tests.EditMode
             var report = HoldoutCourseEvaluator.Evaluate(new[]
             {
                 new CourseEpisodeResult { CourseSeed = 1009, Completed = true, LapTimeSeconds = 12f },
-                new CourseEpisodeResult { CourseSeed = 2027, TimeoutCount = 1 }
+                new CourseEpisodeResult { CourseSeed = 2027, TimeoutCount = 1, EgoOvertakeCount = 1, HazardWasSpawned = true }
             });
             var json = HoldoutEvaluationReportWriter.Serialize(report, new List<CourseEpisodeResult>
             {
                 new CourseEpisodeResult { CourseSeed = 1009, Completed = true, LapTimeSeconds = 12f },
-                new CourseEpisodeResult { CourseSeed = 2027, TimeoutCount = 1 }
-            });
+                new CourseEpisodeResult { CourseSeed = 2027, TimeoutCount = 1, EgoOvertakeCount = 1, HazardWasSpawned = true }
+            }, "visual-bc-human-001", 12, 3,
+                "head-to-head:targetSpeed=1.25,initialProgress=1.5,lateralOffset=-0.28,lateralAmplitude=0.08,lateralFrequencyHz=0.5");
 
+            Assert.That(json, Does.Contain("\"policyLabel\": \"visual-bc-human-001\""));
+            Assert.That(json, Does.Contain("\"evaluationScenario\": \"head-to-head:"));
+            Assert.That(json, Does.Contain("\"observationContract\": \"relative-course-waypoints+speed+visibility\""));
             Assert.That(json, Does.Contain("\"episodes\""));
             Assert.That(json, Does.Contain("\"courseSeed\": 1009"));
             Assert.That(json, Does.Contain("\"timeoutCount\": 1"));
+            Assert.That(json, Does.Contain("\"egoOvertakeCount\": 1"));
+            Assert.That(json, Does.Contain("\"hazardWasSpawned\": true"));
             Assert.That(json, Does.Contain("\"progressMeters\": 0.0"));
         }
 

@@ -43,7 +43,10 @@ namespace PhysicalAi.Evaluation
         public int CollisionCount;
         public int OffCourseCount;
         public int BlindCornerHazardCollisionCount;
+        public bool HazardWasSpawned;
         public int OpponentCollisionCount;
+        public int EgoOvertakeCount;
+        public int OpponentOvertakeCount;
         public int TimeoutCount;
         public float ProgressMeters;
         public float DistanceFromCenterline;
@@ -57,10 +60,13 @@ namespace PhysicalAi.Evaluation
         public readonly float CollisionRate;
         public readonly float OffCourseRate;
         public readonly float BlindCornerHazardCollisionRate;
+        public readonly float HazardEpisodeRate;
         public readonly float OpponentCollisionRate;
+        public readonly float EgoOvertakeRate;
+        public readonly float OpponentOvertakeRate;
         public readonly float TimeoutRate;
 
-        public HoldoutEvaluationReport(int episodeCount, float completionRate, float meanCompletedLapTimeSeconds, float collisionRate, float offCourseRate, float blindCornerHazardCollisionRate = 0f, float opponentCollisionRate = 0f, float timeoutRate = 0f)
+        public HoldoutEvaluationReport(int episodeCount, float completionRate, float meanCompletedLapTimeSeconds, float collisionRate, float offCourseRate, float blindCornerHazardCollisionRate = 0f, float opponentCollisionRate = 0f, float timeoutRate = 0f, float egoOvertakeRate = 0f, float opponentOvertakeRate = 0f, float hazardEpisodeRate = 0f)
         {
             EpisodeCount = episodeCount;
             CompletionRate = completionRate;
@@ -70,6 +76,9 @@ namespace PhysicalAi.Evaluation
             BlindCornerHazardCollisionRate = blindCornerHazardCollisionRate;
             OpponentCollisionRate = opponentCollisionRate;
             TimeoutRate = timeoutRate;
+            EgoOvertakeRate = egoOvertakeRate;
+            OpponentOvertakeRate = opponentOvertakeRate;
+            HazardEpisodeRate = hazardEpisodeRate;
         }
     }
 
@@ -89,7 +98,10 @@ namespace PhysicalAi.Evaluation
                 (float)results.Count(result => result.OffCourseCount > 0) / results.Count,
                 (float)results.Count(result => result.BlindCornerHazardCollisionCount > 0) / results.Count,
                 (float)results.Count(result => result.OpponentCollisionCount > 0) / results.Count,
-                (float)results.Count(result => result.TimeoutCount > 0) / results.Count);
+                (float)results.Count(result => result.TimeoutCount > 0) / results.Count,
+                (float)results.Count(result => result.EgoOvertakeCount > 0) / results.Count,
+                (float)results.Count(result => result.OpponentOvertakeCount > 0) / results.Count,
+                (float)results.Count(result => result.HazardWasSpawned) / results.Count);
         }
 
         public static bool IsHoldoutSeed(int seed) => Array.IndexOf(HoldoutCourseSuite.Seeds, seed) >= 0;

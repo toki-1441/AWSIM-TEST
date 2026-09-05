@@ -40,11 +40,17 @@ def main():
     parser.add_argument("--metrics", type=Path, default=Path("Build/physical-ai-visual-bc-metrics.json"))
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--learning-rate", type=float, default=0.0003)
+    parser.add_argument("--waypoint-dropout", type=float, default=0.0,
+                        help="probability of masking privileged relative-waypoint features during training")
+    parser.add_argument("--seed", type=int, default=1, help="random seed for reproducible feature masking")
     parser.add_argument("--device", default="cpu", choices=("cpu", "cuda"))
     args = parser.parse_args()
+    if not 0.0 <= args.waypoint_dropout <= 1.0:
+        raise SystemExit("--waypoint-dropout must be between 0 and 1")
     if args.device == "cuda" and not torch.cuda.is_available():
         raise SystemExit("--device cuda was requested but CUDA is unavailable")
     device = torch.device(args.device)
+    torch.manual_seed(args.seed)
     samples, width = load_samples(args.manifest)
     policy = VisionPolicy(width).to(device)
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.learning_rate)
@@ -55,6 +61,11 @@ def main():
         for sample in samples:
             encoded = base64.b64encode((args.manifest.parent / sample["image"]).read_bytes()).decode("ascii")
             vector = torch.tensor(sample["observation"], dtype=torch.float32, device=device).clamp(-10, 10).div(10).unsqueeze(0)
+            # The first four values are ego speed, camera-derived safe speed and
+            # opponent kinematics. Values from offset four are privileged generated
+            # course waypoints, so mask only them to make camera evidence necessary.
+            if vector.shape[1] > 4 and torch.rand((), device=device).item() < args.waypoint_dropout:
+                vector[:, 4:] = 0
             prediction, _ = policy(image_tensor(encoded, device), vector)
             loss = loss_function(prediction, torch.tensor(target(sample), dtype=torch.float32, device=device).unsqueeze(0))
             optimizer.zero_grad()
@@ -66,7 +77,9 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"vector_width": width, "model_state": policy.state_dict()}, args.output)
     args.metrics.parent.mkdir(parents=True, exist_ok=True)
-    args.metrics.write_text(json.dumps({"samples": len(samples), "epochs": args.epochs, "mse": losses}, indent=2), encoding="utf-8")
+    args.metrics.write_text(json.dumps({"samples": len(samples), "epochs": args.epochs,
+                                        "waypointDropout": args.waypoint_dropout, "seed": args.seed,
+                                        "mse": losses}, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -79,6 +79,41 @@ can be closed continuously.
   - **Requirement:** because the endless form lets coordinates grow without bound, a floating
     origin — keeping the vehicle near the origin and shifting the world instead — is a
     prerequisite for avoiding single-precision degradation.
+- **Streaming spatial integrity — prerequisite for training.** The endless course is a single
+  authoritative geometric representation, not independent visual, collision and centre-line
+  approximations. Every retained chunk must derive its road surface, lane markings, walls and
+  colliders from that representation in the same coordinate frame. Appending, discarding and
+  floating-origin rebasing must preserve their relative positions exactly. A candidate chunk is
+  accepted only when its swept road-and-wall envelope clears every non-adjacent retained section
+  and its own non-adjacent sections by the configured vehicle and safety margin. Generation may
+  retry deterministically, but it must not fall back to a permanently straight or fixed course:
+  the training distribution must retain parameterised corners as well as straights.
+- **Streaming horizon.** Before the vehicle can reach the end of retained geometry, sufficient
+  forward road must already be generated. Passed road is discarded only after it is safely behind
+  the vehicle. Creating or removing a chunk must not introduce a gap, overlap, visible flicker,
+  or contact impulse into the vehicle.
+- **Streaming progression and variety — non-negotiable acceptance rule.** Generation is driven by
+  the vehicle's forward progress, not merely by a fixed initial cache.  At every reachable point
+  it must retain a configured look-ahead horizon and append the next valid chunk before that
+  horizon is exhausted.  Collision rejection is not permission to stop extending the road or to
+  degenerate into a straight-only continuation: deterministic retries must select another valid
+  curved or straight primitive while preserving the configured distribution.  A candidate is
+  invalid if either its swept road/wall envelope or its rendered geometry intersects, touches, or
+  visually crosses any non-adjacent retained chunk.  The same rule applies after trimming and
+  after a floating-origin rebase.
+- **Generation-boundary dynamics.** A chunk append, removal or rebase is a world-management
+  operation only.  It must not alter the vehicle's pose, velocity, angular velocity, suspension
+  contact state, or controller command except for normal road/wall contact that already existed.
+  This explicitly rules out the unexplained inertial kick reported near newly created road.
+- **Driving and visual baseline — prerequisite for learning.** The built player must be manually
+  drivable with stable, predictable vehicle motion.  The road must be continuously rendered well
+  beyond the stopping/sight distance in front of the car; it must not appear as darkness, a
+  short isolated patch, seams, z-fighting or flickering edges.  The car must remain supported by
+  one continuous physical road surface, and walls/boundary colliders must keep it in the intended
+  corridor without pumping, bouncing, snagging or a spurious inertia impulse when a chunk is
+  appended or discarded.  A vehicle-mounted camera view, approximately 0.15 m above the vehicle
+  and looking down the driving direction, must be available alongside the operator view so that
+  the primary observation can be inspected in the running build.
 - **Learning interface.** Python integration via ML-Agents or similar; large-scale parallelism is
   not assumed.
 - **Data ratio.** 90% simulation, 10% real vehicle.
@@ -102,6 +137,52 @@ can be closed continuously.
 | Blind-corner safety | Collision and departure rates at blind corners are significantly lower than without sightline consideration |
 | Head-to-head | Overtaking and defending happen without collisions |
 | Sim-to-real consistency | After calibrating the model with real telemetry, the change in simulated behaviour stays within tolerance |
+| Streaming-course integrity | Across initial generation, repeated append/discard cycles and floating-origin rebases, varied curved and straight chunks remain non-intersecting, gap-free and mutually aligned (surface, markings, walls and colliders); no generation event causes an unintended vehicle impulse |
+| Usable running build | A human can drive the built player through the streamed corridor without persistent bouncing, floor/edge flicker, or unexplained force near generation boundaries; boundary collision prevents unintended departure |
+| Forward road and camera observability | The build always renders a continuous, illuminated forward corridor beyond the usable sight/stopping distance, continues generating before it is reached, and exposes an inspectable vehicle-mounted camera view |
+| Course variety | Streaming generation retains the configured mix of valid corners and straights; an intersection-rejection fallback must retry or use another valid curved primitive, never silently reduce the run to straight-only geometry |
+| Streaming progression | During a sustained manual drive, the vehicle triggers repeated forward chunk appends and passed-chunk retirement; the retained horizon never runs out and the generated path demonstrably contains both curves and straights |
+| Intersection exclusion | No initial, appended, retained, trimmed or rebased non-adjacent road/wall pair has physical-envelope overlap, touching, or a visible crossing; this must be checked over multiple seeds and the actual running build |
+| Generation-boundary stability | Instrumented append, discard and rebase events leave the vehicle state continuous and do not cause a perceptible kick, bounce, snag or new contact; this is validated while manually driving the built player, not by static geometry alone |
+
+## Pre-learning running-build gate
+
+The following four properties are a single prerequisite for collecting demonstrations or judging a
+policy.  They are deliberately **not tradeable**: passing one does not compensate for a failure in
+another.  In particular, an implementation must not avoid crossings by switching to a fixed
+initial cache, stopping generation, or silently producing only straight road.
+
+| Gate | Required behaviour | Evidence required |
+| --- | --- | --- |
+| Geometric continuity | One authoritative streamed corridor produces matching road, marking, wall and collision geometry.  No non-adjacent retained geometry may overlap, touch or visibly cross, including after append, retirement and rebase. | Multi-seed automated envelope checks **and** a captured manual built-player drive through the same transitions. |
+| Forward progression and variety | Driving forward repeatedly appends valid chunks before the horizon is reached and retires passed chunks.  The forward visible road remains a mixed sequence of parameterised curves and straights; it is not merely the initial course cache. | Instrumented append/retirement/rebase record during a sustained manual drive, with visible forward horizon. |
+| Driveable physical corridor | The manually controlled vehicle is supported by continuous ground and is retained by boundary collision.  It has no persistent pumping, bouncing, snag, floor/edge flicker, seam, or force/velocity change caused by generation work. | Built-player manual-drive recording across several generation boundaries; vehicle-state instrumentation at each event. |
+| Camera-primary observability | The built player exposes the vehicle-mounted camera and renders an illuminated, continuous forward sight/stopping corridor.  A visual-policy evaluation must prove that it received rendered camera frames; batch/headless output with a Null graphics device is not camera evidence. | Captured operator view plus reports with nonzero rendered-camera frame counts, and a paired camera-blackout comparison. |
+
+## Immediate corrective milestone: driveable varied streaming
+
+The current course work is complete only when one built-player run satisfies all of the following
+conditions together.  Fixing intersection rejection by removing corners, exhausting the generated
+horizon, or retaining only the initial cache is a failure, not a partial pass.
+
+1. The retained road contains both straights and non-trivial left and right curves, while every
+   non-adjacent swept road/wall envelope remains separated by the configured clearance.
+2. Forward motion repeatedly triggers generation before the remaining drivable horizon falls below
+   the configured sight/stopping requirement; passed chunks are retired only after the vehicle and
+   its cameras can no longer depend on them.
+3. The road surface, markings, walls and colliders share the same sampled boundaries at every seam.
+   There are no gaps, overlaps, z-fighting edges or wall discontinuities.
+4. Append, retirement and floating-origin events preserve rigidbody pose, linear/angular velocity,
+   suspension contact and current control input, apart from ordinary pre-existing contact forces.
+5. A human can drive through several append/retirement cycles without persistent pumping, bouncing,
+   snagging, unexplained inertia, or unintended departure through the boundary collision.
+6. The operator view and the approximately 0.15 m-high vehicle camera both show an illuminated,
+   continuous forward road far enough to choose an action before reaching generated geometry.
+
+Acceptance evidence must include a multi-seed geometry test, an event log listing retained horizon,
+primitive type, append/retirement/rebase events and vehicle-state deltas, plus a captured sustained
+manual run of the built player.  Compile success, EditMode tests, or a static screenshot alone do not
+close this milestone.
 
 ## Implementation order
 
@@ -109,3 +190,16 @@ The vehicle physics layer is the precondition for every other goal. Proceeding t
 generation and learning while it is unverified risks accumulating learning signal that is
 physically inconsistent throughout. **The tire physics model is therefore what must be built and
 verified first.**
+
+For the primary endless-training form, a second non-negotiable foundation is streaming-course
+integrity. It is completed before visual tuning or policy training: first establish one coordinate
+authority and a continuous, non-intersecting road/collision corridor through append, discard and
+floating-origin transitions; then verify, in the actual built player, that a manually driven
+vehicle remains stable while the forward curved-and-straight horizon is extended and old chunks
+are retired; then validate the camera observation; and only then collect demonstrations or train
+policies.
+Straight-only continuation, a fixed substitute course, compile-only checks, and EditMode-only
+tests are not acceptable evidence for this milestone.  In particular, a change that prevents
+intersections by freezing generation, starving the forward horizon, or removing curved primitives
+does not satisfy the goal; it is a regression until the full streaming acceptance criteria above
+are met.

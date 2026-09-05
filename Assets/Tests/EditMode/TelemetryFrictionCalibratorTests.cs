@@ -29,20 +29,46 @@ namespace PhysicalAi.Tests.EditMode
         [Test]
         public void CalibrationData_JsonRoundTripPreservesTelemetrySamples()
         {
-            var data = new TelemetryCalibrationData { Samples = new[] { new CorneringTelemetrySample { Speed = 4f, YawRateRadiansPerSecond = 1f, BankDegrees = 2f } } };
+            var data = new TelemetryCalibrationData
+            {
+                RunId = "tt02-asphalt-001",
+                RawSampleCount = 2,
+                Samples = new[] { new CorneringTelemetrySample { Speed = 4f, YawRateRadiansPerSecond = 1f, BankDegrees = 2f } }
+            };
 
             var restored = JsonUtility.FromJson<TelemetryCalibrationData>(JsonUtility.ToJson(data));
 
             Assert.That(restored.Samples, Has.Length.EqualTo(1));
             Assert.That(restored.Samples[0].Speed, Is.EqualTo(4f));
+            Assert.That(restored.RunId, Is.EqualTo("tt02-asphalt-001"));
+            Assert.That(restored.RawSampleCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Estimate_ExcludesNonCorneringSamplesFromFitAndRmse()
+        {
+            const float friction = 0.8f;
+            const float gravity = 9.80665f;
+            var result = TelemetryFrictionCalibrator.Estimate(new List<CorneringTelemetrySample>
+            {
+                new CorneringTelemetrySample { Speed = 10f, YawRateRadiansPerSecond = friction * gravity / 10f },
+                new CorneringTelemetrySample { Speed = 0.1f, YawRateRadiansPerSecond = 0.1f }
+            });
+
+            Assert.That(result.SampleCount, Is.EqualTo(1));
+            Assert.That(result.RejectedLowAccelerationSampleCount, Is.EqualTo(1));
+            Assert.That(result.LateralAccelerationRmse, Is.LessThan(0.001f));
         }
 
         [Test]
         public void CalibrationReport_ContainsFitQualityMetrics()
         {
-            var json = TelemetryCalibrationReportWriter.Serialize(new FrictionCalibrationResult(0.82f, 12, 0.14f));
+            var json = TelemetryCalibrationReportWriter.Serialize(new FrictionCalibrationResult(0.82f, 12, 0.14f), "tt02-asphalt-001", 15);
             StringAssert.Contains("\"frictionCoefficient\":", json);
+            StringAssert.Contains("\"runId\": \"tt02-asphalt-001\"", json);
+            StringAssert.Contains("\"rawSampleCount\": 15", json);
             StringAssert.Contains("\"sampleCount\": 12", json);
+            StringAssert.Contains("\"rejectedLowAccelerationSampleCount\": 0", json);
         }
     }
 }

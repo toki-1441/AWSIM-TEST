@@ -54,8 +54,12 @@ internal class PostInstall : IPostprocessBuildWithReport
                                     .Where(path => soWithVersionReg.IsMatch(path))
                                     .ToList();
             foreach (var libPath in versionedLibs) {
-                FileUtil.CopyFileOrDirectory(
-                    libPath, outputDir + "/" + execFilename + "_Data/Plugins/" + Path.GetFileName(libPath));
+                // Recent Unity versions may already copy a versioned library
+                // before this compatibility hook runs. FileUtil refuses to
+                // overwrite it and emits a misleading post-build exception, so
+                // make repeated and incremental post-processing idempotent.
+                var destination = outputDir + "/" + execFilename + "_Data/Plugins/" + Path.GetFileName(libPath);
+                File.Copy(libPath, destination, true);
             }
         } else {
             FileUtil.CopyFileOrDirectory(

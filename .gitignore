@@ -35,6 +35,8 @@ ExportedObj/
 *.csproj
 *.unityproj
 *.sln
+# Unity regenerates this from the project name; AWSIM.slnx is the tracked one.
+/AWSIM-TEST.slnx
 *.suo
 *.tmp
 *.user

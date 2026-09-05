@@ -8,13 +8,21 @@ Unity editor state.
 ## Perception contract
 
 The scene uses HDRP and contains a directional key light plus a global volume.
-Exposure is fixed at 9 EV. Automatic exposure is deliberately excluded: its
-adaptation would make an unchanged scene encode as different camera observations
-on successive policy steps.
+Both the ego and chase cameras clear to the same muted venue colour rather than
+depending on HDRP's sky initialisation; this prevents a black background during
+player startup. Exposure is fixed at 9 EV. Automatic exposure is deliberately
+excluded: its adaptation would make an unchanged scene encode as different camera
+observations on successive policy steps.
 
-The ego camera has a 0.02 m near clipping plane and a 120 m far clipping plane.
-The former matters at 1/10 scale: Unity's default 0.3 m plane is nearly the
+The ego camera is mounted about 0.15 m above the floor and pitches down 22°. Its
+0.02 m near clipping plane and 120 m far clipping plane keep both the compact car
+and the upcoming corridor visible; Unity's default 0.3 m near plane is nearly the
 length of the 0.385 m TT-02 and hides obstacles inside its stopping distance.
+
+Streaming episodes preload three deterministic course chunks before the first
+physics step, so the camera can render the upcoming road and turns rather than
+only the initial short chunk. Subsequent chunks retain the same append/discard
+streaming behaviour, extending again while about 12 m of generated road remains.
 
 ## Assets and geometry
 
@@ -30,9 +38,23 @@ the physical wheel mounts; colliders from the donor prefab are removed, so they
 cannot affect the ray-cast vehicle model. If the donor asset is unavailable,
 the generator emits a material-assigned primitive as an explicit fallback.
 
+The rendered road cubes are deliberately not colliders. They sit over one large,
+continuous `PhysicalAiGround` floor, the only layer considered by wheel
+raycasts. This avoids wheel contact switching between overlapping or adjacent
+road pieces at segment joins.
+
+The asphalt is lifted 2 mm above that floor and both road and duct sections have
+non-overlapping ends, avoiding depth-buffer flicker. The vehicle body has a
+physical box collider, while every duct boundary keeps an enabled box collider;
+the walls therefore stop the car without ever being a tire-contact surface.
+
+The upper-right 384×216 inset displays the same render texture captured by the
+ego perception camera. It is a display-only `RawImage`: it does not add a second
+sensor or change the observation contract.
+
 ## Verification
 
-Regenerating the scene compiles cleanly and the EditMode suite passes 58 cases.
+Regenerating the scene compiles cleanly and the EditMode suite passes 67 cases.
 The camera image must be inspected from a graphics-enabled player because the
 headless graphics device intentionally cannot produce a rendered frame. The two
 graphics-enabled PlayMode contracts pass in an isolated Unity test scene; the

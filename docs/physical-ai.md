@@ -41,11 +41,18 @@ Autoware messages, and tests reach its components by string type name.
    recorder logs `(observation, command, reward)`.
 5. The episode ends on completion, course departure, or collision with a hazard or opponent.
 
+The step reward combines progress, collision/departure and unsafe-speed penalties with one-shot
+arc-length pass events: a verified ego overtake adds 5, while being passed subtracts 3. Collision
+still ends the episode with the larger safety penalty, so contact cannot be traded for a pass.
+
 The planning and actuation split is load-bearing: a learned policy only ever emits
 `PlanningCommand { DesiredSpeed, DesiredLateralOffsetNormalized }`, and a classical controller
 owns actuation. `PlanningObservation` is a flat `float[]` —
 `[speed, cameraSafeSpeed, opponentLongitudinal, opponentLateral]` followed by five floats per
-waypoint. Changing that layout invalidates every recorded dataset and trained model, so
+waypoint: `[localX, localZ, curvature, maximumSafeSpeed, auxiliary]`. The first auxiliary value
+is opponent-relative longitudinal speed, the second is opponent-relative lateral speed, and the
+remaining values are zero. This fills formerly unused slots without changing the vector width.
+Changing that layout width invalidates every recorded dataset and trained model, so
 `BehaviorCloningPolicy` falls back to the reference policy on a feature-count mismatch rather
 than throwing.
 
@@ -77,6 +84,21 @@ $UNITY -batchmode -nographics -quit -projectPath . \
 python3 scripts/train_bc.py <demos>/*.jsonl --output Assets/PhysicalAi/Models/bc-policy.json
 
 python3 scripts/export_camera_demonstrations.py <demos>/*.jsonl --output Build/camera-demos
+# Export only human F8 recordings and reject missing camera-command pairs.
+PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
+  scripts/prepare_human_visual_bc_dataset.sh path/to/human-recordings Build/camera-demos/human-001
+# Labelled nominal subset (hazards and opponents disabled).
+scripts/run_human_nominal_capture.sh Build/teleop/human-nominal-001
+scripts/prepare_human_nominal_dataset.sh Build/teleop/human-nominal-001 \
+  Build/camera-demos/human-nominal-001
+# Human-operated overtake/defence examples, saved directly to the supplied
+# directory with a scenario label (F8 starts/stops each recording).
+scripts/run_human_head_to_head_capture.sh Build/teleop/human-head-to-head-001
+scripts/prepare_human_head_to_head_dataset.sh Build/teleop/human-head-to-head-001 \
+  Build/camera-demos/human-head-to-head-001
+scripts/run_human_blind_corner_capture.sh Build/teleop/human-blind-corner-001
+scripts/prepare_human_blind_corner_dataset.sh Build/teleop/human-blind-corner-001 \
+  Build/camera-demos/human-blind-corner-001
 
 python3 scripts/rl_policy_server.py --port 5015     # single-environment REINFORCE trainer
 
@@ -98,30 +120,99 @@ Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation training -physicalAiMaximumEpisodeSeconds 2
 # Record opt-in synthetic reference demonstrations (not labelled as human teleop).
 Build/AWSIM.x86_64 -physicalAiEvaluation rollout -physicalAiEpisodeCount 8 -physicalAiMaximumEpisodeSeconds 30 -physicalAiRecordReferenceDemonstrations
+# Inspect the primary endless-streaming route with the deterministic reference
+# planner. This disables keyboard input; it is a geometry/physics observation
+# aid, not learned-policy evidence. Streaming transition continuity is written
+# to Player.log.
+Build/AWSIM.x86_64 -physicalAiReferenceDriver
+# Operator-driven streaming evidence. Drive with WASD/arrows until several chunks
+# append and a floating-origin rebase occurs, then close the player. The script
+# preserves Player.log and emits an instrumentation report. It accepts only
+# manual-teleoperation transitions and checks pose/velocity, control input,
+# grounded-wheel state, suspension state, horizon, lifecycle and curve variety.
+scripts/run_manual_streaming_validation.sh Build/validation/manual-streaming-001
+# Record at least 30 seconds of the same run. Review it, fill the generated
+# operator-assessment.json, and run the finalization command written to
+# streaming-continuity-summary.txt. Only that paired report may pass the full
+# manual gate; an automated reference-driver log is rejected.
 # Save comparable run artifacts outside Unity's persistent-data default.
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout -physicalAiReportDirectory Build/evaluations/run-001
-# Baseline for the blind-corner safety comparison (planning ignores camera occlusion).
+# Record body and per-wheel diagnostics without changing BC/RL observations.
+# HDRP player evaluation requires an available graphics display.
+Build/AWSIM.x86_64 -physicalAiEvaluation holdout -physicalAiRecordDynamicsTelemetry \
+  -physicalAiReportDirectory Build/evaluations/dynamics-001 -physicalAiQuitAfterEvaluation
+# Heuristic reference-planner diagnostic only (planning ignores camera occlusion).
+# This is not the learned-policy blind-corner goal baseline; the goal gate uses
+# the same checkpoint with rendered frames withheld.
 Build/AWSIM.x86_64 -physicalAiEvaluation holdout -physicalAiDisableVisibilitySafety -physicalAiReportDirectory Build/evaluations/blind-baseline
 
-# Reproducibly evaluate one saved visual checkpoint on both distributions.
+# Reproducibly evaluate one saved visual checkpoint on both distributions. This
+# requires a graphical display: the script intentionally does not use batchmode,
+# because a Null graphics device cannot produce camera JPEG observations. It
+# automatically disables keyboard teleoperation, so the external policy — not
+# zero manual input — owns low-level actuation.
+# fails unless both reports record nonzero `cameraFramesCaptured` (or nonzero
+# `cameraFramesWithheld` for the blackout ablation).
 PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
   scripts/run_visual_evaluation.sh Build/physical-ai-vision-reinforce.pt Build/evaluations/run-001
 
-# Train visual REINFORCE from rendered frames, then evaluate the saved checkpoint.
+# Paired camera ablation: run the same checkpoint and evaluation seeds while
+# withholding only camera JPEGs at the Unity-to-Python bridge. The generated
+# reports are labelled `+image-blackout`; compare them with the normal run.
+PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
+  PHYSICAL_AI_IMAGE_BLACKOUT=1 \
+  scripts/run_visual_evaluation.sh Build/physical-ai-vision-reinforce.pt Build/evaluations/run-001-blackout
+
+# Fine-tune a visual-BC checkpoint with visual REINFORCE, then evaluate the saved
+# checkpoint.  Initialising from BC is the normal path: random-policy REINFORCE
+# is only a bridge smoke test, not a meaningful driving baseline.
+# This also requires a graphical display: the rollout script deliberately avoids
+# batchmode so the trainer receives rendered camera JPEGs.
 # The trainer keeps a cross-episode return baseline: it deliberately does not
 # normalise each rollout independently, so timeout and collision penalties retain
 # their learning signal. Each round uses a separate deterministic training-only
 # seed batch; fixed training and holdout seeds remain evaluation-only.
+# The default balanced curriculum cycles deterministic nominal, forced
+# blind-corner-hazard and moving-opponent head-to-head rounds. Set
+# PHYSICAL_AI_RL_CURRICULUM=nominal only for an explicitly labelled ablation.
+# All runner output directories are canonicalized before they are passed to the
+# player; Unity otherwise resolves relative -logFile paths beside the executable.
 PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
+  PHYSICAL_AI_INITIAL_CHECKPOINT=Build/physical-ai-visual-bc.pt \
+  PHYSICAL_AI_VISION_ARCHITECTURE=spatial-v2 \
   scripts/run_vision_reinforce_training.sh Build/training/run-001 100
 
-# Produce model, blind-corner, head-to-head baseline reports and the final gate result.
+# Produce normal, same-checkpoint image-blackout, head-to-head and reference-race
+# reports plus the final gate result. Each report label includes the checkpoint's
+# SHA-256. The gate rejects a different/unhashed policy, missing rendered/withheld
+# frames, changed seed order, overlapping training/holdout seeds, or a non-solo
+# generalisation report. Blind-corner safety compares only seed-matched episodes
+# in which a hazard spawned and requires an exact paired significance test; a
+# zero rate without hazard exposure is intentionally inconclusive. Hazard
+# probability is 1 by default for this evaluation (override with
+# PHYSICAL_AI_HAZARD_PROBABILITY); normal training remains probabilistic.
 PHYSICAL_AI_PYTHON=../.physical-ai-venv/bin/python \
   scripts/run_goal_gate.sh Build/training/run-001/physical-ai-vision-reinforce.pt Build/evaluations/gate-001
 
+# The gate's head-to-head probe starts a deliberately slower opponent 1.5 m
+# ahead and 0.28 m to the side, with deterministic ±0.08 m lateral motion at
+# 0.5 Hz. The suite can therefore measure a pass against a moving/blocking
+# opponent without placing two collision boxes at the same point. Override only to evaluate a
+# documented alternate scenario; solo reports are rejected as race evidence.
+# PHYSICAL_AI_OVERTAKE_OPPONENT_SPEED=1.25
+# PHYSICAL_AI_OVERTAKE_OPPONENT_INITIAL_PROGRESS_METERS=1.5
+# PHYSICAL_AI_OVERTAKE_OPPONENT_LATERAL_OFFSET=-0.28
+# PHYSICAL_AI_OVERTAKE_OPPONENT_LATERAL_AMPLITUDE=0.08
+# PHYSICAL_AI_OVERTAKE_OPPONENT_LATERAL_FREQUENCY_HZ=0.5
+
+# Each report records these resolved command-line settings in
+# `evaluationScenario`; a solo or unlabelled report is rejected as race evidence.
+
 python3 scripts/convert_telemetry_csv.py run.csv --output Assets/PhysicalAi/Calibration/real-run.json
 
-python3 scripts/evaluate_goal_metrics.py --training train.json --holdout holdout.json --blind-baseline blind.json --race-baseline race.json
+python3 scripts/evaluate_goal_metrics.py --training train.json --holdout holdout.json \
+  --head-to-head head-to-head.json --blind-baseline image-blackout.json \
+  --race-baseline reference-race.json
 ```
 
 The training scene is generated rather than hand-authored, so a component that the scene must
@@ -130,13 +221,13 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (58 cases) and two graphics-enabled PlayMode cases pass.
+17 EditMode test files (89 cases) and six graphics-enabled PlayMode cases pass.
 The PlayMode runner keeps its generated empty bootstrap scene: the ordinary
 player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
-| Combined-slip vehicle and tire model | yes | tire model | yes |
+| Combined-slip vehicle and tire model | yes | tire model + dynamics acceleration regression | yes; opt-in per-wheel diagnostic JSONL |
 | Vehicle specification (MAGP class TT-02) | yes | yes | yes |
 | Physics-constrained course generation | yes | yes | yes |
 | Procedural track, progress and departure | yes | yes; open/closed route-distance and finish-line regressions | yes |
@@ -148,7 +239,7 @@ player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 | ROS2 control input | yes | mapping | starts an idempotent AWSIM ROS2 node and subscribes; it applies only after a command arrives |
 | Behaviour cloning policy and trainer | yes | yes | **no model asset assigned** |
 | Demonstration recorder | yes | yes | scene-wired; F8 records human teleoperation, while an explicit player flag records separately prefixed reference-policy demonstrations |
-| Telemetry friction calibration | yes | yes | CSV conversion, scene applier and persistent fit-quality report are ready; awaiting a real-run asset |
+| Telemetry friction calibration | yes | yes | CSV conversion rejects malformed/non-steady-state data, records run provenance, and the scene persists accepted-sample RMSE; awaiting a real-run asset |
 | Holdout evaluation | yes | evaluator | scene-wired JSON report sink records aggregate metrics and seed-level episode outcomes |
 | Sensor rig, planar LiDAR, TF | yes | yes | mounted, not read by any policy |
 | Rendered camera observation | yes | EditMode + graphics-enabled PlayMode | mounted; emitted to external bridges without changing vector-policy compatibility |
@@ -170,8 +261,8 @@ Measured against the [goals document](physical-ai-goals.md):
 | Zero-shot holdout evaluation | partly: fixed holdout circuits and finite training-distribution evaluation write separate JSON reports; surveyed geometry and trained-policy results remain |
 | **Camera field of view and occlusion** | partly: rendered JPEG camera frames feed a runnable visual REINFORCE baseline; the built-in reference/BC vector policies still use the conservative visibility bound rather than image inference |
 | **Endless streaming map with floating origin** | met structurally: deterministic chunks append ahead, rear state and logical history are bounded, and world state is shifted |
-| Sim RL via a Python interface | partly: `PythonRlBridge` supports both the dependency-free vector baseline and a camera-capable PyTorch REINFORCE trainer; a repeatable trained-policy report remains required |
-| Definition-of-done metrics | partly: completion, lap-time, collision, departure, timeout, blind-corner-hazard collision and opponent-collision rates are persisted after a holdout suite; comparative target thresholds remain to be established |
+| Sim RL via a Python interface | partly: `PythonRlBridge` supports both the dependency-free vector baseline and a camera-capable PyTorch REINFORCE trainer. Planning decisions run at 10 Hz and are held by the 100 Hz classical low-level loop; a repeatable trained-policy report remains required |
+| Definition-of-done metrics | partly: completion, lap-time, collision, departure, timeout, blind-corner-hazard collision, opponent-collision, ego-overtake and opponent-overtake rates are persisted after a holdout suite; comparative target thresholds remain to be established |
 
 The visual learning path is now executable. Everything listed as "partly" still needs measured
 training and evaluation evidence rather than more structural wiring.

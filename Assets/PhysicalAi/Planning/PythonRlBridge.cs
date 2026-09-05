@@ -16,6 +16,7 @@ namespace PhysicalAi.Planning
         [SerializeField] string _host = "127.0.0.1";
         [SerializeField, Min(1)] int _port = 5015;
         [SerializeField] bool _connectOnStart;
+        [SerializeField, Min(0.01f)] float _decisionPeriodSeconds = 0.1f;
 
         TcpClient _client;
         StreamReader _reader;
@@ -25,6 +26,15 @@ namespace PhysicalAi.Planning
         bool _connected;
         Texture2D _cameraReadback;
         string _latestCameraJpeg;
+        bool _imageBlackout;
+        bool _loggedFirstCameraFrame;
+        bool _loggedFirstRequest;
+        bool _loggedFirstWrite;
+        float _nextDecisionTime;
+        /// <summary>Number of rendered camera frames converted to JPEG for this bridge lifetime.</summary>
+        public int CameraFramesCaptured { get; private set; }
+        /// <summary>Number of camera frames intentionally withheld by the image ablation.</summary>
+        public int CameraFramesWithheld { get; private set; }
 
         [Serializable] class Request { public string type; public float[] observation; public string cameraJpegBase64; public float reward; public bool terminal; }
         [Serializable] class Response { public float desiredSpeed; public float desiredLateralOffsetNormalized; }
@@ -33,6 +43,7 @@ namespace PhysicalAi.Planning
         {
             // Keep the authored scene disconnected by default.  A player build can opt in
             // without changing scene YAML: -physicalAiRlPort 5015.
+            _imageBlackout = HasCommandLineArgument("-physicalAiImageBlackout");
             var port = GetCommandLineArg("-physicalAiRlPort");
             if (int.TryParse(port, out var requestedPort) && requestedPort > 0)
             {
@@ -77,7 +88,12 @@ namespace PhysicalAi.Planning
             {
                 _client = new TcpClient();
                 _client.SendTimeout = 1000;
-                _client.ReceiveTimeout = 1000;
+                // CUDA/PyTorch lazily initialises on the first inference. A one-second
+                // socket timeout disconnects the rollout before its first action even
+                // reaches the policy, while subsequent decisions are normally much
+                // faster. Keep the synchronous planning contract but permit that
+                // bounded startup cost.
+                _client.ReceiveTimeout = 10000;
                 _client.Connect(_host, _port);
                 var stream = _client.GetStream();
                 _reader = new StreamReader(stream);
@@ -96,9 +112,20 @@ namespace PhysicalAi.Planning
         PlanningCommand RequestCommand(PlanningObservation observation)
         {
             if (!_connected) return _lastCommand;
+            if (Time.fixedTime + 0.0001f < _nextDecisionTime) return _lastCommand;
+            if (!_loggedFirstRequest)
+            {
+                Debug.Log("Physical AI RL bridge: first planning request.");
+                _loggedFirstRequest = true;
+            }
             try
             {
                 _writer.WriteLine(JsonUtility.ToJson(new Request { type = "step", observation = observation.Features, cameraJpegBase64 = _latestCameraJpeg, reward = _pendingReward, terminal = false }));
+                if (!_loggedFirstWrite)
+                {
+                    Debug.Log("Physical AI RL bridge: first request written; waiting for action.");
+                    _loggedFirstWrite = true;
+                }
                 var line = _reader.ReadLine();
                 var response = string.IsNullOrEmpty(line) ? null : JsonUtility.FromJson<Response>(line);
                 if (response == null)
@@ -107,6 +134,7 @@ namespace PhysicalAi.Planning
                     return _lastCommand;
                 }
                 _pendingReward = 0f;
+                _nextDecisionTime = Time.fixedTime + _decisionPeriodSeconds;
                 _lastCommand = new PlanningCommand
                 {
                     DesiredSpeed = Mathf.Max(0f, response.desiredSpeed),
@@ -120,7 +148,15 @@ namespace PhysicalAi.Planning
         void OnEpisodeFinished(bool completed, bool collision, bool offCourse)
         {
             if (!_connected) return;
-            try { _writer.WriteLine(JsonUtility.ToJson(new Request { type = "terminal", reward = _pendingReward, terminal = true })); }
+            try
+            {
+                Debug.Log("Physical AI RL bridge: sending terminal transition.");
+                _writer.WriteLine(JsonUtility.ToJson(new Request { type = "terminal", reward = _pendingReward, terminal = true }));
+                // The evaluation runner may quit the player immediately after this
+                // callback. Wait for the trainer to persist its terminal update so a
+                // valid rollout cannot lose its checkpoint or learning-curve point.
+                _reader.ReadLine();
+            }
             catch (IOException) { Disconnect(); }
         }
 
@@ -128,6 +164,21 @@ namespace PhysicalAi.Planning
 
         void OnCameraObservation(CameraObservationFrame frame)
         {
+            // Evaluation ablation: preserve the bridge cadence and vector
+            // observation, but withhold every camera JPEG. The visual servers
+            // map an absent image to their zero image tensor, so normal and
+            // blackout runs differ only in the primary visual observation.
+            if (_imageBlackout)
+            {
+                if (!_loggedFirstCameraFrame)
+                {
+                    Debug.Log("Physical AI RL bridge: camera blackout enabled; JPEG frames are withheld.");
+                    _loggedFirstCameraFrame = true;
+                }
+                CameraFramesWithheld++;
+                _latestCameraJpeg = null;
+                return;
+            }
             if (!_connected || frame.Image == null || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
                 return;
             var previous = RenderTexture.active;
@@ -141,11 +192,21 @@ namespace PhysicalAi.Planning
             _cameraReadback.Apply(false);
             RenderTexture.active = previous;
             _latestCameraJpeg = Convert.ToBase64String(_cameraReadback.EncodeToJPG(75));
+            CameraFramesCaptured++;
+            if (!_loggedFirstCameraFrame)
+            {
+                Debug.Log($"Physical AI RL bridge: first camera JPEG ({frame.Image.width}x{frame.Image.height}) captured.");
+                _loggedFirstCameraFrame = true;
+            }
         }
 
         void Disconnect()
         {
             _connected = false;
+            _loggedFirstRequest = false;
+            _loggedFirstWrite = false;
+            _loggedFirstCameraFrame = false;
+            _nextDecisionTime = 0f;
             if (_orchestrator != null && _orchestrator.CommandProvider == RequestCommand)
                 _orchestrator.CommandProvider = null;
             _reader?.Dispose(); _writer?.Dispose(); _client?.Dispose();
@@ -163,6 +224,13 @@ namespace PhysicalAi.Planning
             for (var index = 0; index + 1 < arguments.Length; index++)
                 if (arguments[index] == parameter) return arguments[index + 1];
             return null;
+        }
+
+        static bool HasCommandLineArgument(string parameter)
+        {
+            foreach (var argument in Environment.GetCommandLineArgs())
+                if (argument == parameter) return true;
+            return false;
         }
     }
 }

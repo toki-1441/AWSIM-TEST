@@ -11,6 +11,8 @@ namespace PhysicalAi.Calibration
     [Serializable]
     public class TelemetryCalibrationData
     {
+        public string RunId;
+        public int RawSampleCount;
         public CorneringTelemetrySample[] Samples;
     }
 
@@ -23,6 +25,8 @@ namespace PhysicalAi.Calibration
         [SerializeField, Min(0.01f)] float _uncalibratedDomainMeanFriction = 0.9f;
 
         public FrictionCalibrationResult LastResult { get; private set; }
+        public string LastRunId { get; private set; }
+        public int LastRawSampleCount { get; private set; }
         public event Action<FrictionCalibrationResult> CalibrationApplied;
 
         public bool ApplyCalibration()
@@ -33,6 +37,8 @@ namespace PhysicalAi.Calibration
             if (data?.Samples == null || data.Samples.Length == 0)
                 return false;
             LastResult = TelemetryFrictionCalibrator.Estimate(data.Samples);
+            LastRunId = data.RunId;
+            LastRawSampleCount = data.RawSampleCount > 0 ? data.RawSampleCount : data.Samples.Length;
             TelemetryFrictionCalibrator.Apply(_vehicle, LastResult);
             _domainRandomizer?.SetFrictionScale(LastResult.FrictionCoefficient / _uncalibratedDomainMeanFriction);
             CalibrationApplied?.Invoke(LastResult);

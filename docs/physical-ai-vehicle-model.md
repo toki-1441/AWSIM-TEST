@@ -60,9 +60,11 @@ the telemetry calibration chain exists precisely to correct them once a real car
 | Yaw inertia | 0.016 kg·m² | derived by scaling the reference platform |
 | Suspension rest length | 0.02 m | estimated (touring car travel is short) |
 | Spring rate | 2000 N/m | derived from 2.5 mm static sag |
-| Damper rate | 25 N·s/m | derived, ~0.4 of critical damping |
+| Damper rate | 35 N·s/m | operationally tuned, ~0.54 of critical damping |
+| Maximum wheel normal force | 13 N | operational safety cap, 2.5× static corner load |
 | Wheel rotational inertia | 6×10⁻⁵ kg·m² | derived, wheel plus reflected rotor |
 | Drive / brake torque per wheel | 0.148 N·m | derived, traction limit |
+| No-load wheel speed | 200 rad/s | derived from T17.5 / 8.27:1 drivetrain |
 | Max steering angle | 25° | estimated |
 | Surface friction | 0.9 | estimated (adhesive tires are prohibited) |
 
@@ -98,10 +100,26 @@ not the motor, is the binding constraint.**
 Through 8.27:1 onto a 0.201 m tire circumference that is 5.3 and 6.4 m/s unloaded, so roughly
 **4–5 m/s in practice**.
 
+The vehicle model uses **200 rad/s** as its common maximum wheel angular velocity
+(6.4 m/s / 0.032 m, rounded down). Drive torque follows a first-order DC
+torque–speed envelope and becomes zero there. This prevents an airborne wheel
+from accumulating energy that the regulated drivetrain cannot supply.
+
 **Suspension.** Static load per wheel is `2.1 × 9.81 / 4 = 5.15 N`. Assuming 2.5 mm of static
 sag gives `k ≈ 2060 N/m`, rounded to **2000 N/m**. Critical damping per corner is
-`2√(2000 × 0.525) = 64.8 N·s/m`; RC dampers typically run at 0.3–0.4 of critical, hence
-**25 N·s/m**.
+`2√(2000 × 0.525) = 64.8 N·s/m`. The initial 25 N·s/m estimate visibly
+under-damped the generated car, so the current operational value is **35 N·s/m**
+(~0.54 critical) pending real-vehicle damper telemetry. A fully compressed
+uncalibrated ray-cast spring can otherwise turn a vertical hop into excessive tire
+force, so contact is capped at **13 N** per wheel (2.5× the 5.15 N static load)
+until real bump-stop and damper traces are available.
+
+The ray-cast model has no unsprung wheel mass. On rebound its contact force cannot
+be tensile, so it creates a false contact/liftoff cycle when the rigid body is free
+to heave. MAGP's generated venue is flat, so the operational scene freezes vertical
+translation plus pitch and roll; forward, lateral, and yaw dynamics remain active.
+Do not treat this planar stabilisation as suitable for banking, jumps, or uneven
+roads: those require a full unsprung wheel/suspension model.
 
 **Wheel rotational inertia.** A 45 g wheel and tire at 0.032 m contributes `½mr² = 2.3×10⁻⁵`.
 A ~30 g rotor of ~6.25 mm radius contributes `5.9×10⁻⁷`, reflected through the 8.27:1 gearing

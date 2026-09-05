@@ -1,0 +1,17 @@
+{
+  "operator": "",
+  "completedUtc": "",
+  "notes": "",
+  "checks": {
+    "manualControlResponsive": false,
+    "continuousGroundSupport": false,
+    "boundaryCollisionRetainedVehicle": false,
+    "noPersistentPumpingBouncingOrSnagging": false,
+    "noGenerationBoundaryKick": false,
+    "noVisibleGapOverlapCrossingOrFlicker": false,
+    "operatorCameraVisible": false,
+    "sensorCameraVisible": false,
+    "continuousIlluminatedForwardRoad": false,
+    "bothCurvesAndStraightsObserved": false
+  }
+}

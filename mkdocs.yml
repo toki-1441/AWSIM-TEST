@@ -114,8 +114,10 @@ nav:
     - Goals: physical-ai-goals.md
     - Vehicle model: physical-ai-vehicle-model.md
     - Course: physical-ai-course.md
+    - Vehicle oscillation investigation: physical-ai-vehicle-oscillation.md
     - Course and vehicle visuals: physical-ai-visuals.md
     - Offline behavior cloning: physical-ai-bc.md
+    - Data collection: physical-ai-data-collection.md
     - Readiness audit: physical-ai-readiness.md
   - Downloads: Downloads/index.md
   - License: License/index.md

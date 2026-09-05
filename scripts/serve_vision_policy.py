@@ -35,6 +35,13 @@ class Handler(socketserver.StreamRequestHandler):
             request = json.loads(raw)
             if request.get("type") == "step":
                 self.wfile.write((json.dumps(self.server.command(request.get("observation", []), request.get("cameraJpegBase64"))) + "\n").encode("utf-8"))
+                self.wfile.flush()
+            elif request.get("type") == "terminal":
+                # PythonRlBridge waits for this acknowledgement before a player
+                # evaluation exits, ensuring the final message cannot leave a
+                # synchronous stream half-open.
+                self.wfile.write(b'{"ack":true}\n')
+                self.wfile.flush()
 
 
 def main():

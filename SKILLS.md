@@ -33,6 +33,26 @@ It reads the required editor version from `ProjectSettings/ProjectVersion.txt` a
 
 The helper is intentionally local-only: it does not deploy or publish artifacts.
 
+## Manual streaming acceptance
+
+Use the rebuilt Linux player and the evidence launcher from the repository root:
+
+```bash
+scripts/run_manual_streaming_validation.sh Build/validation/manual-streaming-001
+```
+
+Drive with WASD or the arrow keys through at least three append operations, a history trim and a
+floating-origin rebase. Record at least 30 seconds of the same run. The launcher preserves
+`Player.log`, creates `instrumented-streaming-report.json`, and writes an operator-assessment
+template. After reviewing the video, complete that template and run the finalization command in
+`streaming-continuity-summary.txt`.
+
+Only a report whose transitions identify `manual-teleoperation` may satisfy this gate. Automated
+reference-driver output is useful regression evidence but must not be presented as a human drive.
+The final report also requires unchanged pose/velocity, control input, grounded-wheel mask and
+suspension state at every world-management event, both turn directions, a nonempty forward horizon,
+the video, and all visual/handling checks.
+
 ## Confidential references
 
 Reference repositories are implementation aids, not project inputs. Recreate only the needed general behavior, never copy non-public source or configuration, and remove the local reference checkout once the implementation is in place.

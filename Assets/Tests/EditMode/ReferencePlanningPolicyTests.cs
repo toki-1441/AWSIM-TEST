@@ -19,7 +19,7 @@ namespace PhysicalAi.Tests.EditMode
             var command = ReferencePlanningPolicy.Choose(waypoints, 10f, 2f);
 
             Assert.That(command.DesiredSpeed, Is.EqualTo(8f));
-            Assert.That(command.DesiredLateralOffsetNormalized, Is.EqualTo(0.5f));
+            Assert.That(command.DesiredLateralOffsetNormalized, Is.EqualTo(0.175f));
         }
 
         [Test]
@@ -37,7 +37,17 @@ namespace PhysicalAi.Tests.EditMode
             var command = ReferencePlanningPolicy.Choose(waypoints, 10f, 2f);
 
             Assert.That(command.DesiredSpeed, Is.EqualTo(7f));
-            Assert.That(command.DesiredLateralOffsetNormalized, Is.EqualTo(0.5f));
+            Assert.That(command.DesiredLateralOffsetNormalized, Is.EqualTo(0.035f));
+        }
+
+        [Test]
+        public void Choose_CapsReferenceSpeedAtTheCourseDesignSpeed()
+        {
+            var command = ReferencePlanningPolicy.Choose(
+                new[] { new RelativeCourseWaypoint(Vector3.zero, 0f, 8f) },
+                cameraSafeSpeed: 6f, trackHalfWidth: 0.5f, maximumDesiredSpeed: 3.5f);
+
+            Assert.That(command.DesiredSpeed, Is.EqualTo(3.5f));
         }
     }
 }

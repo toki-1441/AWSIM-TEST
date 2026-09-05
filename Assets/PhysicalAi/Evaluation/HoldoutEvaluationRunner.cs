@@ -4,6 +4,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using PhysicalAi.Planning;
 using UnityEngine;
 
@@ -22,8 +23,14 @@ namespace PhysicalAi.Evaluation
         float _episodeStartTime;
         bool _timedOut;
         bool _trainingDistribution;
+        string _policyLabel;
         public event Action<HoldoutEvaluationReport> EvaluationCompleted;
+        /// <summary>Raised after an episode is measured and before the next seed is reset.</summary>
+        public event Action<CourseEpisodeResult> EpisodeMeasured;
         public bool IsTrainingDistributionSuite => _trainingDistribution;
+        /// <summary>Policy identity captured before the first evaluated reset.</summary>
+        public string PolicyLabel => _policyLabel ?? "unknown";
+        public string EvaluationScenarioLabel { get; private set; } = "unconfigured";
         public IReadOnlyList<CourseEpisodeResult> Results => _session?.Results ?? Array.Empty<CourseEpisodeResult>();
 
         void OnEnable()
@@ -94,6 +101,27 @@ namespace PhysicalAi.Evaluation
             if (seeds == null || seeds.Count == 0)
                 throw new ArgumentException("At least one episode seed is required.", nameof(seeds));
             _trainingDistribution = trainingDistribution;
+            // Generalisation metrics are solo driving metrics.  A racing opponent
+            // is evaluated in its own opt-in scenario so it cannot turn every
+            // holdout result into an opponent-collision failure.
+            var headToHead = HasCommandLineFlag("-physicalAiHeadToHead");
+            _orchestrator.SetHeadToHeadEnabled(headToHead);
+            if (headToHead)
+            {
+                var speed = GetCommandLineFloat("-physicalAiOpponentTargetSpeed");
+                var initialProgress = GetCommandLineFloat("-physicalAiOpponentInitialProgressMeters");
+                var lateralOffset = GetCommandLineFloat("-physicalAiOpponentLateralOffset");
+                var lateralAmplitude = GetCommandLineFloat("-physicalAiOpponentLateralOscillationAmplitude");
+                var lateralFrequency = GetCommandLineFloat("-physicalAiOpponentLateralOscillationFrequencyHz");
+                _orchestrator.ConfigureHeadToHead(speed, initialProgress, lateralOffset, lateralAmplitude, lateralFrequency);
+                EvaluationScenarioLabel = $"head-to-head:targetSpeed={Format(speed)},initialProgress={Format(initialProgress)}," +
+                    $"lateralOffset={Format(lateralOffset)},lateralAmplitude={Format(lateralAmplitude)},lateralFrequencyHz={Format(lateralFrequency)}";
+            }
+            else
+                EvaluationScenarioLabel = "solo";
+            // A supplied label is normally a checkpoint/run identifier. Preserve it
+            // verbatim so a report remains attributable after a later scene change.
+            _policyLabel = GetCommandLineArg("-physicalAiPolicyLabel") ?? _orchestrator.ActivePolicyLabel;
             _seeds = seeds;
             _session = new HoldoutEvaluationSession(!trainingDistribution);
             _nextSeedIndex = 0;
@@ -122,9 +150,12 @@ namespace PhysicalAi.Evaluation
         {
             if (_session == null || !_session.HasActiveEpisode)
                 return;
-            _session.CompleteEpisode(completed, collision, offCourse, Time.time,
+            var result = _session.CompleteEpisode(completed, collision, offCourse, Time.time,
                 _orchestrator.LastCollisionWasBlindCornerHazard, _orchestrator.LastCollisionWasOpponent, _timedOut,
-                _orchestrator.ProgressMeters, _orchestrator.DistanceFromCenterline);
+                _orchestrator.ProgressMeters, _orchestrator.DistanceFromCenterline,
+                _orchestrator.EgoOvertakeCount, _orchestrator.OpponentOvertakeCount,
+                _orchestrator.HazardWasSpawned);
+            EpisodeMeasured?.Invoke(result);
             StartNextEpisode();
         }
 
@@ -140,6 +171,24 @@ namespace PhysicalAi.Evaluation
         {
             var value = GetCommandLineArg(parameter);
             return int.TryParse(value, out var parsed) && parsed > 0 ? parsed : fallback;
+        }
+
+        static float? GetCommandLineFloat(string parameter)
+        {
+            var value = GetCommandLineArg(parameter);
+            return float.TryParse(value, out var parsed) && !float.IsNaN(parsed) && !float.IsInfinity(parsed)
+                ? parsed : (float?)null;
+        }
+
+        static string Format(float? value) => value.HasValue
+            ? value.Value.ToString("R", CultureInfo.InvariantCulture)
+            : "scene-default";
+
+        static bool HasCommandLineFlag(string parameter)
+        {
+            foreach (var argument in Environment.GetCommandLineArgs())
+                if (argument == parameter) return true;
+            return false;
         }
     }
 }

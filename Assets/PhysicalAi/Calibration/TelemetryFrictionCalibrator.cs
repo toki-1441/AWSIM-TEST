@@ -20,13 +20,16 @@ namespace PhysicalAi.Calibration
     public readonly struct FrictionCalibrationResult
     {
         public readonly float FrictionCoefficient;
+        /// <summary>Number of steady-state samples used for both fit and RMSE.</summary>
         public readonly int SampleCount;
+        public readonly int RejectedLowAccelerationSampleCount;
         public readonly float LateralAccelerationRmse;
 
-        public FrictionCalibrationResult(float frictionCoefficient, int sampleCount, float lateralAccelerationRmse)
+        public FrictionCalibrationResult(float frictionCoefficient, int sampleCount, float lateralAccelerationRmse, int rejectedLowAccelerationSampleCount = 0)
         {
             FrictionCoefficient = frictionCoefficient;
             SampleCount = sampleCount;
+            RejectedLowAccelerationSampleCount = rejectedLowAccelerationSampleCount;
             LateralAccelerationRmse = lateralAccelerationRmse;
         }
     }
@@ -45,14 +48,25 @@ namespace PhysicalAi.Calibration
                 throw new ArgumentNullException(nameof(samples));
 
             var estimates = new List<float>();
+            var acceptedSamples = new List<CorneringTelemetrySample>();
+            var rejectedLowAcceleration = 0;
             foreach (var sample in samples)
             {
+                if (!IsFinite(sample.Speed) || !IsFinite(sample.YawRateRadiansPerSecond) || !IsFinite(sample.BankDegrees))
+                    throw new ArgumentException("Telemetry contains a non-finite sample.", nameof(samples));
+                if (sample.Speed <= 0f)
+                    throw new ArgumentException("Telemetry contains a non-positive speed.", nameof(samples));
+
                 var lateralAcceleration = Mathf.Abs(sample.Speed * sample.YawRateRadiansPerSecond);
                 if (lateralAcceleration < minimumLateralAcceleration)
+                {
+                    rejectedLowAcceleration++;
                     continue;
+                }
                 var bank = sample.BankDegrees * Mathf.Deg2Rad;
                 var denominator = Gravity * Mathf.Max(0.01f, Mathf.Cos(bank));
                 estimates.Add(Mathf.Max(0f, (lateralAcceleration - Gravity * Mathf.Abs(Mathf.Sin(bank))) / denominator));
+                acceptedSamples.Add(sample);
             }
             if (estimates.Count == 0)
                 throw new ArgumentException("Telemetry contains no usable cornering samples.", nameof(samples));
@@ -60,15 +74,21 @@ namespace PhysicalAi.Calibration
             estimates.Sort();
             var friction = estimates[estimates.Count / 2];
             var squaredError = 0f;
-            foreach (var sample in samples)
+            foreach (var sample in acceptedSamples)
             {
                 var bank = sample.BankDegrees * Mathf.Deg2Rad;
                 var predicted = Gravity * (friction * Mathf.Cos(bank) + Mathf.Abs(Mathf.Sin(bank)));
                 var measured = Mathf.Abs(sample.Speed * sample.YawRateRadiansPerSecond);
                 squaredError += (predicted - measured) * (predicted - measured);
             }
-            return new FrictionCalibrationResult(friction, estimates.Count, Mathf.Sqrt(squaredError / samples.Count));
+            return new FrictionCalibrationResult(
+                friction,
+                acceptedSamples.Count,
+                Mathf.Sqrt(squaredError / acceptedSamples.Count),
+                rejectedLowAcceleration);
         }
+
+        static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
         public static void Apply(CombinedSlipVehicle vehicle, FrictionCalibrationResult result)
         {

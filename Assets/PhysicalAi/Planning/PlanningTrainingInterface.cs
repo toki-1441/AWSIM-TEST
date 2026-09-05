@@ -48,7 +48,13 @@ namespace PhysicalAi.Planning
                 features[offset + 1] = waypoints[i].LocalPosition.z;
                 features[offset + 2] = waypoints[i].Curvature;
                 features[offset + 3] = waypoints[i].MaximumSafeSpeed;
-                features[offset + 4] = i == 0 ? opponent.RelativeLongitudinalSpeed : 0f;
+                // Preserve the established five-values-per-waypoint layout. The
+                // first two auxiliary slots carry opponent motion, allowing a
+                // policy to distinguish closing speed from a left/right move
+                // without invalidating existing dataset widths or checkpoints.
+                features[offset + 4] = i == 0
+                    ? opponent.RelativeLongitudinalSpeed
+                    : i == 1 ? opponent.RelativeLateralSpeed : 0f;
             }
             return new PlanningObservation(features);
         }
@@ -56,7 +62,8 @@ namespace PhysicalAi.Planning
 
     public static class PlanningReward
     {
-        public static float Calculate(float progressMeters, bool collision, bool offCourse, float speed, float safeSpeed)
+        public static float Calculate(float progressMeters, bool collision, bool offCourse, float speed, float safeSpeed,
+            int egoOvertakeCount = 0, int opponentOvertakeCount = 0)
         {
             var reward = progressMeters;
             if (collision)
@@ -65,6 +72,11 @@ namespace PhysicalAi.Planning
                 reward -= 10f;
             if (speed > safeSpeed + 0.1f)
                 reward -= (speed - safeSpeed) * 2f;
+            // Progress already rewards speed, but it cannot distinguish a safe
+            // pass from following the slower opponent indefinitely. Emit these
+            // event rewards once, when the arc-length ordering actually changes.
+            reward += Mathf.Max(0, egoOvertakeCount) * 5f;
+            reward -= Mathf.Max(0, opponentOvertakeCount) * 3f;
             return reward;
         }
 

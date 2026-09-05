@@ -20,6 +20,8 @@ namespace PhysicalAi.Safety
         [SerializeField] bool _spawnOnStart = true;
 
         public GameObject ActiveHazard { get; private set; }
+        /// <summary>Whether the current episode contains a generated blind-corner hazard.</summary>
+        public bool HazardSpawnedThisEpisode { get; private set; }
 
         void Start()
         {
@@ -30,6 +32,7 @@ namespace PhysicalAi.Safety
         public bool SpawnEpisodeHazard(int seed)
         {
             ClearHazard();
+            HazardSpawnedThisEpisode = false;
             if (_hazardPrefabs.Length == 0 || _candidateSpawns.Length == 0)
                 return false;
             var random = new System.Random(seed);
@@ -41,15 +44,17 @@ namespace PhysicalAi.Safety
             if (hidden.Count == 0) return false;
             var spawn = hidden[random.Next(hidden.Count)];
             ActiveHazard = Instantiate(_hazardPrefabs[random.Next(_hazardPrefabs.Length)], spawn.position, spawn.rotation);
+            HazardSpawnedThisEpisode = true;
             return true;
         }
 
         public bool SpawnCourseHazard(GeneratedCourse course, int seed)
         {
             ClearHazard();
+            HazardSpawnedThisEpisode = false;
             if (course == null || _egoCamera == null) return false;
             var random = new System.Random(seed);
-            if (random.NextDouble() > _spawnProbability) return false;
+            if (random.NextDouble() > RequestedSpawnProbability()) return false;
             var hiddenCorners = new System.Collections.Generic.List<Vector3>();
             for (var index = 2; index < course.Centerline.Count; index++)
                 if (Mathf.Abs(course.Curvature[index]) >= 0.02f && !BlindCornerSafety.IsVisible(_egoCamera, course.Centerline[index] + Vector3.up * VehicleSpecification.Default.BodyCenterHeight, _occluderMask))
@@ -60,6 +65,7 @@ namespace PhysicalAi.Safety
             ActiveHazard.transform.SetPositionAndRotation(hiddenCorners[random.Next(hiddenCorners.Count)], Quaternion.identity);
             if (_hazardPrefabs.Length == 0) ActiveHazard.transform.localScale = new Vector3(0.12f, 0.12f, 0.16f);
             if (ActiveHazard.GetComponent<EpisodeHazard>() == null) ActiveHazard.AddComponent<EpisodeHazard>();
+            HazardSpawnedThisEpisode = true;
             return true;
         }
 
@@ -74,6 +80,19 @@ namespace PhysicalAi.Safety
         {
             if (ActiveHazard != null)
                 ActiveHazard.transform.position += offset;
+        }
+
+        float RequestedSpawnProbability()
+        {
+            var arguments = Environment.GetCommandLineArgs();
+            for (var index = 0; index + 1 < arguments.Length; index++)
+            {
+                if (arguments[index] != "-physicalAiHazardProbability")
+                    continue;
+                if (float.TryParse(arguments[index + 1], out var probability))
+                    return Mathf.Clamp01(probability);
+            }
+            return _spawnProbability;
         }
     }
 }

@@ -52,7 +52,8 @@ class VisionPolicy(nn.Module):
 
 
 class VisionReinforceTrainer:
-    def __init__(self, learning_rate, discount, device, entropy_coefficient=0.001, baseline_decay=0.95):
+    def __init__(self, learning_rate, discount, device, entropy_coefficient=0.001, baseline_decay=0.95,
+                 initialize_from=None):
         self.learning_rate, self.discount, self.device = learning_rate, discount, device
         self.entropy_coefficient = entropy_coefficient
         self.baseline_decay = baseline_decay
@@ -63,10 +64,19 @@ class VisionReinforceTrainer:
         # is shared by every action in that episode.
         self.return_baseline = 0.0
         self.return_scale = 1.0
+        self.initialize_from = Path(initialize_from) if initialize_from else None
 
     def _ensure_policy(self, observation):
         if self.policy is None:
             self.policy = VisionPolicy(len(observation)).to(self.device)
+            if self.initialize_from:
+                checkpoint = torch.load(self.initialize_from, map_location=self.device, weights_only=True)
+                if checkpoint.get("vector_width") != len(observation):
+                    raise ValueError(
+                        f"Initial checkpoint expects {checkpoint.get('vector_width')} observation values, "
+                        f"but Unity supplied {len(observation)}")
+                self.policy.load_state_dict(checkpoint["model_state"])
+                print(f"initialised policy from {self.initialize_from}", flush=True)
             self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.learning_rate)
         if self.policy.head[0].in_features != 16 + len(observation):
             raise ValueError("Observation layout changed during training")
@@ -152,16 +162,27 @@ class TrainerServer(socketserver.TCPServer):
 class Handler(socketserver.StreamRequestHandler):
     def handle(self):
         print(f"client connected: {self.client_address[0]}:{self.client_address[1]}", flush=True)
+        logged_first_request = False
         for raw in self.rfile:
+            if not logged_first_request:
+                print(f"first request received: {len(raw)} bytes", flush=True)
+                logged_first_request = True
             request = json.loads(raw)
             if request.get("type") == "step":
                 self.server.trainer.reward_previous(request.get("reward", 0.0))
                 action = self.server.trainer.act(request.get("observation", []), request.get("cameraJpegBase64"))
                 self.wfile.write((json.dumps(action) + "\n").encode("utf-8"))
+                # A planning decision can be sent at 10 Hz, which is too sparse to
+                # fill StreamRequestHandler's output buffer incidentally. Unity waits
+                # synchronously for this action, so every response must be visible to
+                # the socket immediately rather than relying on buffer pressure.
+                self.wfile.flush()
             elif request.get("type") == "terminal":
                 metric = self.server.trainer.finish_episode(request.get("reward", 0.0))
                 self.server.trainer.save(self.server.checkpoint)
                 self.server.record(metric)
+                self.wfile.write(b'{"ack":true}\n')
+                self.wfile.flush()
                 print(f"episode {metric['episode']}: return={metric['return']:.3f}, steps={metric['steps']}", flush=True)
 
 
@@ -173,12 +194,15 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=0.0003)
     parser.add_argument("--discount", type=float, default=0.99)
     parser.add_argument("--entropy-coefficient", type=float, default=0.001)
+    parser.add_argument("--initialize-from", type=Path,
+                        help="compatible visual-BC or REINFORCE checkpoint used as the initial policy")
     parser.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
     args = parser.parse_args()
     if args.device == "cuda" and not torch.cuda.is_available():
         raise SystemExit("--device cuda was requested but CUDA is unavailable")
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available() else args.device if args.device != "auto" else "cpu")
-    trainer = VisionReinforceTrainer(args.learning_rate, args.discount, device, args.entropy_coefficient)
+    trainer = VisionReinforceTrainer(args.learning_rate, args.discount, device, args.entropy_coefficient,
+                                     initialize_from=args.initialize_from)
     with TrainerServer(("127.0.0.1", args.port), Handler, trainer, args.output, args.metrics) as server:
         print(f"Visual REINFORCE trainer on 127.0.0.1:{args.port} ({device}); checkpoints -> {args.output}")
         server.serve_forever()
