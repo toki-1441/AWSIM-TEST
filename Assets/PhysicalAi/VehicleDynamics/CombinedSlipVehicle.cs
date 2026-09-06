@@ -89,8 +89,22 @@ namespace PhysicalAi.VehicleDynamics
                 // A real damper and bump stop cannot create arbitrary load. The
                 // uncalibrated ray-cast spring once let full compression inject a
                 // many-g acceleration into the chassis, which appears as chatter.
+                // The damper is integrated implicitly. Explicitly, a corner that reaches
+                // the force ceiling accelerates the body at 15 m/s^2, gaining 150 mm/s of
+                // suspension velocity in one 10 ms step, while only 206 mm/s is enough for
+                // the damper term to cancel the spring entirely. The force therefore
+                // alternated between 0 N and the ceiling on consecutive steps, and because
+                // diagonally opposite corners alternated out of phase it drove a
+                // stationary vehicle to 5.6 rad/s with no input.
+                //
+                // Treating the damper's own reaction implicitly gives
+                //   F = (k*x - c*v) / (1 + c*dt/m_corner)
+                // which is unconditionally stable and leaves the static solution, where
+                // v is zero, exactly unchanged.
+                var cornerMass = Mathf.Max(0.0001f, body.mass * 0.25f);
+                var damperResponse = 1f + _damperRate * deltaTime / cornerMass;
                 var normalForce = Mathf.Clamp(
-                    _springRate * compression - _damperRate * suspensionVelocity,
+                    (_springRate * compression - _damperRate * suspensionVelocity) / damperResponse,
                     0f,
                     _maximumNormalForce);
                 body.AddForceAtPosition(hit.normal * normalForce, hit.point, ForceMode.Force);
@@ -241,9 +255,34 @@ namespace PhysicalAi.VehicleDynamics
                 wheel?.ResetState();
         }
 
+        /// <summary>
+        /// Roll and pitch are held flat, and heave is removed with them.
+        ///
+        /// Roll stiffness here is 2*k*halfTrack^2 = 27.6 N*m/rad against a roll inertia
+        /// of 0.0042 kg*m^2, a 12.9 Hz mode sampled 7.7 times per cycle at 100 Hz. That
+        /// is far short of the ~20 samples explicit integration needs, so the attitude
+        /// diverges: a stationary vehicle with no input reached 5.6 rad/s, which an
+        /// operator felt as being flung, as shaking at low speed, and as a car that kept
+        /// turning after it had stopped against a wall. Raising the inertia fourfold only
+        /// reaches 15 samples, and a 400 Hz step would cost four times the physics budget
+        /// this project spends on driving time.
+        ///
+        /// At 1/10 scale with a 0.054 m centre of gravity, attitude contributes little to
+        /// the behaviour being learned, and nothing in the planning observation reads it.
+        /// The friction circle, finite acceleration and finite steering the goals require
+        /// are all unaffected. This makes explicit what the generated scene already did:
+        /// its rigidbody carried these constraints, so only tests ever ran free.
+        /// </summary>
+        public const RigidbodyConstraints PlanarMotionConstraints =
+            RigidbodyConstraints.FreezePositionY |
+            RigidbodyConstraints.FreezeRotationX |
+            RigidbodyConstraints.FreezeRotationZ;
+
         void Awake()
         {
             _rigidbody = GetComponent<Rigidbody>();
+            if (_rigidbody != null)
+                _rigidbody.constraints |= PlanarMotionConstraints;
         }
 
         void FixedUpdate()

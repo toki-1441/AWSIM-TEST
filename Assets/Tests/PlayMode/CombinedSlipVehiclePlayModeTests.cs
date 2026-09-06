@@ -145,6 +145,49 @@ namespace PhysicalAi.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator TT02AtRestWithFreeAttitude_GeneratesNoTorque()
+        {
+            // An operator reported the car still rotating after it had stopped against a
+            // wall, and shaking at low speed. TT02AtRest_DoesNotPumpItsSuspension cannot
+            // see either: it freezes roll and pitch, so any spurious torque is absorbed
+            // by the constraint instead of showing up.
+            var specification = VehicleSpecification.Default;
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            ground.transform.position = new Vector3(0f, -0.1f, 0f);
+            ground.transform.localScale = new Vector3(20f, 0.2f, 20f);
+
+            var root = new GameObject("TT02FreeAttitudeRest");
+            root.transform.position = new Vector3(0f, specification.BodyCenterHeight, 0f);
+            var body = root.AddComponent<Rigidbody>();
+            body.mass = specification.Mass;
+            body.centerOfMass = Vector3.up * (specification.CenterOfGravityHeight - specification.BodyCenterHeight);
+            body.inertiaTensor = specification.InertiaTensor;
+            var vehicle = root.AddComponent<CombinedSlipVehicle>();
+            ConfigureVehicle(vehicle, root.transform, specification);
+
+            for (var settle = 0; settle < 120; settle++)
+                yield return new WaitForFixedUpdate();
+
+            var peakAngularSpeed = 0f;
+            for (var step = 0; step < 200; step++)
+            {
+                yield return new WaitForFixedUpdate();
+                peakAngularSpeed = Mathf.Max(peakAngularSpeed, body.angularVelocity.magnitude);
+            }
+
+            // CombinedSlipVehicle holds the attitude flat, so a stationary vehicle stays
+            // still even though the roll mode is too stiff to integrate explicitly at
+            // 100 Hz. Without that the same setup reached 5.6 rad/s with no input.
+            Assert.That(body.constraints & CombinedSlipVehicle.PlanarMotionConstraints,
+                Is.EqualTo(CombinedSlipVehicle.PlanarMotionConstraints),
+                "the vehicle did not apply its planar motion constraints");
+            Assert.That(peakAngularSpeed, Is.LessThan(0.05f),
+                $"stationary vehicle reached {peakAngularSpeed:F3} rad/s of angular velocity with no input");
+            Object.Destroy(root);
+            Object.Destroy(ground);
+        }
+
+        [UnityTest]
         public IEnumerator TT02AtRest_DoesNotPumpItsSuspension()
         {
             var specification = VehicleSpecification.Default;
