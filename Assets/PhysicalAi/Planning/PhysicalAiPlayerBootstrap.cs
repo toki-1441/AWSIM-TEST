@@ -29,18 +29,25 @@ namespace PhysicalAi.Planning
                 if (argument == "-runTests")
                     return;
 
-            // The AWSIM demo needs the environment assets under Assets/Awsim/Externals,
-            // which are distributed separately and are absent from a plain checkout.
-            // Starting there by default drops the ego vehicle into an empty world, so
-            // it is opt-in and the self-contained Physical AI scene is the default.
-            foreach (var argument in arguments)
+            // The command line stays authoritative: when it already chooses what to
+            // run, start there directly.
+            if (PhysicalAiModeCatalog.CommandLineSelectsAMode(arguments))
             {
-                if (argument != AutowareDemoArgument)
-                    continue;
-                SceneManager.LoadScene("AutowareSimulationDemo", LoadSceneMode.Single);
+                foreach (var argument in arguments)
+                {
+                    if (argument != AutowareDemoArgument)
+                        continue;
+                    SceneManager.LoadScene("AutowareSimulationDemo", LoadSceneMode.Single);
+                    return;
+                }
+                SceneManager.LoadScene("PhysicalAiTraining", LoadSceneMode.Single);
                 return;
             }
-            SceneManager.LoadScene("PhysicalAiTraining", LoadSceneMode.Single);
+
+            // Otherwise let the operator choose. A build has 23 launch flags; requiring
+            // them is an implementer-only interface, and the acceptance criteria for
+            // manual data collection need an operator who is not the author.
+            PhysicalAiModeSelectionScreen.Create();
         }
     }
 }
