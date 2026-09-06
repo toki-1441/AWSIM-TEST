@@ -64,6 +64,22 @@ namespace PhysicalAi.Tests.EditMode
         }
 
         [Test]
+        public void TrainingScene_GivesTheOrchestratorTheVenueFloorToRebase()
+        {
+            EditorSceneManager.OpenScene(ScenePath);
+
+            var orchestrator = Object.FindFirstObjectByType<PhysicalAiEpisodeOrchestrator>();
+            var floor = new SerializedObject(orchestrator).FindProperty("_venueFloor").objectReferenceValue as Transform;
+
+            // The generated road carries no collider, so the wheels rest on the venue
+            // floor. A floating-origin rebase moves the course and the walls; leaving
+            // the floor behind puts the car on ground offset from the corridor it is
+            // driving, which an operator feels as a force near a rebase.
+            Assert.That(floor, Is.Not.Null, "the orchestrator has no venue floor to rebase");
+            Assert.That(floor.gameObject.name, Is.EqualTo("Ground"));
+        }
+
+        [Test]
         public void TrainingScene_KeepsADisplayCameraSeparateFromTheObservationCamera()
         {
             EditorSceneManager.OpenScene(ScenePath);

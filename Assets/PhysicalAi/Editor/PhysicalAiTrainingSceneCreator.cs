@@ -148,6 +148,7 @@ namespace PhysicalAi.Editor
             SetBoolean(orchestrator, "_useStreamingTraining", true);
             SetReference(orchestrator, "_domainRandomizer", randomizer);
             SetReference(orchestrator, "_trackBuilder", track);
+            SetReference(orchestrator, "_venueFloor", ground.transform);
             SetReference(orchestrator, "_progressMonitor", progress);
             SetReference(orchestrator, "_headToHeadScenario", headToHead);
             SetReference(streamingIntegrityLogger, "_orchestrator", orchestrator);

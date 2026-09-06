@@ -103,6 +103,12 @@ namespace PhysicalAi.Planning
         [SerializeField] ProceduralCourseTrackBuilder _trackBuilder;
         [SerializeField] CourseProgressMonitor _progressMonitor;
         [SerializeField] HeadToHeadScenario _headToHeadScenario;
+        /// <summary>
+        /// The venue floor. It is what the wheels actually rest on: the generated road
+        /// is visual only, so the floor must move with the world during a rebase or the
+        /// car is left standing on ground that no longer matches the course around it.
+        /// </summary>
+        [SerializeField] Transform _venueFloor;
         [SerializeField] Camera _egoCamera;
         [SerializeField] CameraObservationSensor _cameraObservationSensor;
         [SerializeField] bool _useStreamingTraining;
@@ -501,6 +507,8 @@ namespace PhysicalAi.Planning
             var offset = -planarPosition;
             _streamingCourse.Translate(offset);
             _trackBuilder?.Translate(offset);
+            if (_venueFloor != null)
+                _venueFloor.position += offset;
             _rigidbody.position += offset;
             // TF is published in the same physics frame.  Synchronise the
             // Rigidbody move before sampling its source Transform, otherwise one
