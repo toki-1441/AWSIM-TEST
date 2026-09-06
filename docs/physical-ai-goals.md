@@ -184,6 +184,64 @@ primitive type, append/retirement/rebase events and vehicle-state deltas, plus a
 manual run of the built player.  Compile success, EditMode tests, or a static screenshot alone do not
 close this milestone.
 
+## Current scope: a trustworthy data-collection and RL environment
+
+Agreed 2026-09-06. This narrows what the project is trying to close **next**; it does not
+change the vision above.
+
+**In scope.** Reaching the point where an operator can drive the built player manually and
+produce demonstration data that is worth training on, and where the RL loop is wired end to
+end. The deliverable is the *environment*, evidenced.
+
+**Explicitly out of scope for now.** Demonstrating that a policy actually learns well.
+Learning outcomes depend on data volume, architecture and hyperparameters, so pursuing them
+before the environment is trustworthy makes an environment defect and a training failure
+indistinguishable. The RL loop only has to be shown to carry observations, rewards, episode
+termination and checkpoints correctly — not to produce a good policy.
+
+**Why "trustworthy" and not merely "possible".** Data recorded from an incorrect vehicle is
+poisoned data. Every hour of manual driving collected over a physics defect is invalidated the
+moment the defect is fixed. The known defects that block collection are therefore in scope:
+the wheel that loses contact across a streaming chunk transition, and the unresolved
+suspension load spikes described in
+[the oscillation investigation](physical-ai-vehicle-oscillation.md).
+
+The acceptance criteria for this scope already exist above: the four **pre-learning running
+build gates** and the **driveable varied streaming** milestone. This section does not add new
+criteria, it states which ones are the current target.
+
+## Mode selection
+
+A build must be usable by an operator who is not its author. Today the player is driven by 23
+command-line flags covering scenario, opponent speed and lateral motion, hazard probability,
+recording and report paths. That is an implementer-only interface, and it conflicts directly
+with the acceptance criteria above, which require an operator to drive the build and affirm a
+checklist.
+
+**Goal.** Launching with arguments selects a mode directly, exactly as it does now. Launching
+**without** arguments presents an on-screen mode selection the operator can proceed from,
+rather than silently defaulting into one scene.
+
+Design constraints, chosen for implementability and extensibility:
+
+- **The mode set is data, not wiring.** Modes live in one declarative table; adding a mode is
+  adding an entry, not authoring a prefab or a scene. This is what keeps the screen from
+  decaying as scenarios multiply.
+- **Immediate-mode UI.** The screen is drawn from code, with no prefab, scene asset or UI
+  framework dependency, matching the existing convention that
+  `PhysicalAiTrainingSceneCreator` generates the scene from code. `PhysicalAiPlayerBootstrap`
+  already owns an otherwise empty scene at build index 0, which is where it belongs.
+- **Presets, not a parameter editor.** The screen offers a small set of useful combinations.
+  Exhaustively exposing every flag would create a second interface to maintain alongside the
+  command line, and the two would drift.
+- **Two levels.** Mode, then scenario or suite where one applies — manual driving splits into
+  nominal, blind-corner and head-to-head; evaluation splits into training and holdout.
+- **The screen reports its own command line.** A selection displays the equivalent arguments,
+  so a configuration explored interactively can be reproduced by an automated run. This keeps
+  operator-driven evidence reproducible rather than one-off.
+
+The command line remains authoritative: when arguments select a mode, the screen is skipped.
+
 ## Implementation order
 
 The vehicle physics layer is the precondition for every other goal. Proceeding to course
@@ -203,3 +261,25 @@ tests are not acceptable evidence for this milestone.  In particular, a change t
 intersections by freezing generation, starving the forward horizon, or removing curved primitives
 does not satisfy the goal; it is a regression until the full streaming acceptance criteria above
 are met.
+
+### Sequence for the current scope
+
+Agreed 2026-09-06, refining the order above for the
+[data-collection and RL environment scope](#current-scope-a-trustworthy-data-collection-and-rl-environment).
+
+1. **Fix the contact loss across streaming transitions.** A PlayMode test that reproduces it is
+   preserved on the `wip/streaming-wheel-contact` branch: after a chunk cycle one wheel reports
+   no contact. Recording demonstrations over this would bake the artefact into the dataset.
+2. **Add mode selection**, so the remaining steps can be performed by an operator rather than
+   by remembering flags.
+3. **Verify manual teleoperation end to end** — the F8 toggle and the speed/lateral controls
+   actually reaching the vehicle in the built player. This has never been confirmed.
+4. **Pass the manual streaming validation** with its video and affirmed operator checklist.
+   `scripts/run_manual_streaming_validation.sh` already refuses evidence produced by the
+   reference planner, so this must be a genuine human drive.
+5. **Collect one human demonstration session** and confirm the dataset validation scripts
+   accept it.
+
+Learning performance is not measured in this sequence. The mathematical-model audit findings
+are consulted only where they bear on step 1; resolving all of them is deferred so that this
+scope stays closable.
