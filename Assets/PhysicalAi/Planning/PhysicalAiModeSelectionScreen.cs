@@ -39,6 +39,17 @@ namespace PhysicalAi.Planning
                 LoadSceneMode.Single);
         }
 
+        /// <summary>
+        /// The host survives the scene load so the selection can outlive the bootstrap
+        /// scene, which means it has to remove itself once a choice has been made.
+        /// Otherwise the menu keeps drawing over the simulation the operator selected.
+        /// </summary>
+        void LaunchAndDismiss(PhysicalAiMode mode, PhysicalAiModeVariant variant)
+        {
+            Launch(mode, variant);
+            Destroy(gameObject);
+        }
+
         void OnGUI()
         {
             const float width = 640f;
@@ -66,7 +77,7 @@ namespace PhysicalAi.Planning
                 {
                     if (mode.Variants.Count == 0)
                     {
-                        Launch(mode, null);
+                        LaunchAndDismiss(mode, null);
                         return;
                     }
                     _mode = mode;
@@ -94,7 +105,7 @@ namespace PhysicalAi.Planning
                 GUILayout.TextField(PhysicalAiModeCatalog.DescribeCommandLine(_mode, _variant));
                 if (GUILayout.Button("Start", GUILayout.Height(32f)))
                 {
-                    Launch(_mode, _variant);
+                    LaunchAndDismiss(_mode, _variant);
                     return;
                 }
             }

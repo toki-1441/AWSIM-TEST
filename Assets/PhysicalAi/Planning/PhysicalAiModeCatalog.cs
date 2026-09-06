@@ -60,6 +60,7 @@ namespace PhysicalAi.Planning
         public const string EvaluationArgument = "-physicalAiEvaluation";
         public const string AutowareDemoArgument = "-physicalAiAutowareDemo";
         const string DemonstrationScenarioArgument = "-physicalAiDemonstrationScenario";
+        const string ArgumentPrefix = "-physicalAi";
 
         public static IReadOnlyList<PhysicalAiMode> Modes { get; } = new[]
         {
@@ -125,23 +126,22 @@ namespace PhysicalAi.Planning
         }
 
         /// <summary>
-        /// True when the command line already chooses what to run, in which case the
-        /// selection screen is skipped. The command line stays authoritative.
+        /// True when the command line already determines the run, in which case the
+        /// selection screen is skipped and the command line stays authoritative.
+        ///
+        /// Any Physical AI argument counts, not only one that names a mode. A script
+        /// that configures a run — a hazard probability, a report directory, a
+        /// recording flag — has already decided what it wants, and interrupting it
+        /// with a menu would stall an automated or scripted session that nobody is
+        /// watching. The screen is for a bare launch.
         /// </summary>
         public static bool CommandLineSelectsAMode(IReadOnlyList<string> arguments)
         {
             if (arguments == null)
                 return false;
-            for (var index = 0; index < arguments.Count; index++)
-            {
-                if (arguments[index] == AutowareDemoArgument)
+            foreach (var argument in arguments)
+                if (argument != null && argument.StartsWith(ArgumentPrefix, StringComparison.Ordinal))
                     return true;
-                if (arguments[index] != EvaluationArgument || index + 1 >= arguments.Count)
-                    continue;
-                var suite = arguments[index + 1];
-                if (suite == "training" || suite == "holdout" || suite == "rollout")
-                    return true;
-            }
             return false;
         }
     }

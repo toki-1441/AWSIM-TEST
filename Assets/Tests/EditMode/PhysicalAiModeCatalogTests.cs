@@ -56,14 +56,15 @@ namespace PhysicalAi.Tests.EditMode
                 new[] { "player", "-physicalAiEvaluation", "holdout" }), Is.True);
             Assert.That(PhysicalAiModeCatalog.CommandLineSelectsAMode(
                 new[] { "player", "-physicalAiAutowareDemo" }), Is.True);
-            // A recording flag alone configures a run; it does not choose one.
+            // A scripted run configures itself and must not be interrupted by a menu,
+            // even when its arguments name no mode.
             Assert.That(PhysicalAiModeCatalog.CommandLineSelectsAMode(
-                new[] { "player", "-physicalAiRecordDynamicsTelemetry" }), Is.False);
-            // A dangling or unknown suite must not suppress the selection screen.
+                new[] { "player", "-physicalAiHazardProbability", "0" }), Is.True);
             Assert.That(PhysicalAiModeCatalog.CommandLineSelectsAMode(
-                new[] { "player", "-physicalAiEvaluation" }), Is.False);
+                new[] { "player", "-physicalAiRecordDynamicsTelemetry" }), Is.True);
+            // Unrelated engine arguments are not a Physical AI decision.
             Assert.That(PhysicalAiModeCatalog.CommandLineSelectsAMode(
-                new[] { "player", "-physicalAiEvaluation", "nonsense" }), Is.False);
+                new[] { "player", "-screen-fullscreen", "0" }), Is.False);
             Assert.That(PhysicalAiModeCatalog.CommandLineSelectsAMode(Array.Empty<string>()), Is.False);
         }
 
