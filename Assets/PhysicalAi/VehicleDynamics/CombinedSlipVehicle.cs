@@ -23,6 +23,7 @@ namespace PhysicalAi.VehicleDynamics
             [SerializeField] bool _driven = true;
             [SerializeField, Min(0.01f)] float _radius = 0.15f;
             [SerializeField, Min(0.01f)] float _suspensionRestLength = 0.08f;
+            [SerializeField, Min(0f)] float _droopTravel = 0.02f;
             [SerializeField, Min(1f)] float _springRate = 18000f;
             [SerializeField, Min(0f)] float _damperRate = 1800f;
             [SerializeField, Min(0.1f)] float _maximumNormalForce = 13f;
@@ -60,7 +61,10 @@ namespace PhysicalAi.VehicleDynamics
                 }
 
                 var up = vehicleTransform.up;
-                var rayLength = _suspensionRestLength + _radius;
+                // The arm keeps the wheel down through its rebound travel, so contact
+                // survives further than the spring's rest length. Reaching only to rest
+                // limits lift tolerance to the static sag.
+                var rayLength = _suspensionRestLength + _droopTravel + _radius;
                 IsGrounded = Physics.Raycast(
                     _suspensionMount.position,
                     -up,

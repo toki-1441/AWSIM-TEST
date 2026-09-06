@@ -363,6 +363,7 @@ namespace PhysicalAi.Editor
                 wheel.FindPropertyRelative("_driven").boolValue = true;
                 wheel.FindPropertyRelative("_radius").floatValue = specification.TireRadius;
                 wheel.FindPropertyRelative("_suspensionRestLength").floatValue = specification.SuspensionRestLength;
+                wheel.FindPropertyRelative("_droopTravel").floatValue = specification.SuspensionDroopTravel;
                 wheel.FindPropertyRelative("_springRate").floatValue = specification.SpringRate;
                 wheel.FindPropertyRelative("_damperRate").floatValue = specification.DamperRate;
                 wheel.FindPropertyRelative("_maximumNormalForce").floatValue = specification.MaximumNormalForcePerWheel;

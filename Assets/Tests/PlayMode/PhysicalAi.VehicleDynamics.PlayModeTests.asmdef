@@ -1,7 +1,7 @@
 {
     "name": "PhysicalAi.VehicleDynamics.PlayModeTests",
     "rootNamespace": "PhysicalAi.Tests.PlayMode",
-    "references": ["PhysicalAi.VehicleDynamics", "PhysicalAi.Sensors", "PhysicalAi.Course"],
+    "references": ["PhysicalAi.VehicleDynamics", "PhysicalAi.Sensors", "PhysicalAi.Course", "PhysicalAi.Planning"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

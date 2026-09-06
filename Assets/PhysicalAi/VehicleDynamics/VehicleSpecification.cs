@@ -26,6 +26,13 @@ namespace PhysicalAi.VehicleDynamics
         [Min(0.001f)] public float BodyWidth;
         [Min(0.001f)] public float BodyHeight;
         [Min(0.001f)] public float SuspensionRestLength;
+        /// <summary>
+        /// Travel available below the spring's rest length, where the arm still holds
+        /// the wheel down but the spring produces no force. Without it the wheel loses
+        /// contact as soon as the body rises by the static sag, which for this vehicle
+        /// is only 2.58 mm — less than the lift produced by a few degrees of roll.
+        /// </summary>
+        [Min(0f)] public float SuspensionDroopTravel;
         [Min(1f)] public float SpringRate;
         [Min(0f)] public float DamperRate;
         [Min(0.1f)] public float MaximumNormalForcePerWheel;
@@ -87,6 +94,7 @@ namespace PhysicalAi.VehicleDynamics
             BodyWidth = 0.19f,
             BodyHeight = 0.11f,
             SuspensionRestLength = 0.02f,
+            SuspensionDroopTravel = 0.02f,
             SpringRate = 2000f,
             DamperRate = 35f,
             // Until damper/bump-stop data is measured, cap a contact to 2.5 times

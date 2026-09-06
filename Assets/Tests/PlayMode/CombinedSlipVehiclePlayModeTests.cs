@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Collections;
 using NUnit.Framework;
 using PhysicalAi.Course;
+using PhysicalAi.Planning;
 using PhysicalAi.VehicleDynamics;
 using PhysicalAi.Sensors;
 using UnityEngine;
@@ -205,6 +206,143 @@ namespace PhysicalAi.Tests.PlayMode
             return new Vector2(velocity.x, velocity.z).magnitude;
         }
 
+        [UnityTest]
+        public IEnumerator StreamingLifecycle_PreservesFreshWheelContactAndNextStepDynamics()
+        {
+            var specification = VehicleSpecification.Default;
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            ground.transform.position = new Vector3(0f, -0.1f, 0f);
+            ground.transform.localScale = new Vector3(1000f, 0.2f, 1000f);
+            ground.layer = LayerMask.NameToLayer(ProceduralCourseTrackBuilder.DrivableSurfaceLayerName);
+            var track = new GameObject("StreamingContactTrack");
+            var builder = track.AddComponent<ProceduralCourseTrackBuilder>();
+            var ego = new GameObject("StreamingContactEgo");
+            var control = new GameObject("UnmodifiedWorldControl");
+            control.transform.position = Vector3.right * 300f;
+            try
+            {
+                var egoVehicle = CreateContactVehicle(ego, specification, ground.layer);
+                var controlVehicle = CreateContactVehicle(control, specification, ground.layer);
+                var egoBody = ego.GetComponent<Rigidbody>();
+                var controlBody = control.GetComponent<Rigidbody>();
+                var progress = ego.AddComponent<CourseProgressMonitor>();
+                var orchestrator = ego.AddComponent<PhysicalAiEpisodeOrchestrator>();
+                SetField(orchestrator, "_vehicle", egoVehicle);
+                SetField(orchestrator, "_trackBuilder", builder);
+                SetField(orchestrator, "_progressMonitor", progress);
+                SetField(orchestrator, "_useStreamingTraining", true);
+                // Trigger the production rebase path frequently within a short test.
+                SetField(orchestrator, "_floatingOriginThreshold", 1f);
+                // The fixture owns command timing and resets; world maintenance
+                // still goes through the production public refresh entry point.
+                orchestrator.enabled = false;
+                orchestrator.SendMessage("Awake");
+                Assert.That(Quaternion.Angle(egoBody.inertiaTensorRotation, Quaternion.identity), Is.LessThan(0.001f),
+                    $"ego inertia axes after activation {egoBody.inertiaTensorRotation.eulerAngles}, constraints {egoBody.constraints}");
+                orchestrator.ResetEpisode(12345);
+                var transitions = new System.Collections.Generic.List<StreamingCourseTransition>();
+                orchestrator.StreamingTransitioned += transitions.Add;
+
+                for (var cycle = 0; cycle < 4; cycle++)
+                {
+                    var course = orchestrator.Course;
+                    var index = course.Centerline.Count - 20;
+                    var heading = Quaternion.LookRotation(course.Centerline[index + 1] - course.Centerline[index]);
+                    egoBody.position = course.Centerline[index] + Vector3.up * specification.BodyCenterHeight;
+                    controlBody.position = new Vector3(300f, specification.BodyCenterHeight, 0f);
+                    egoBody.rotation = controlBody.rotation = heading;
+                    // Unity re-derives a constrained body's orientation on the next
+                    // physics step, so a pose assigned while rotation is frozen is not
+                    // the pose that is simulated. Place unconstrained, let the
+                    // suspension settle, then freeze the settled attitude.
+                    egoBody.constraints = controlBody.constraints = RigidbodyConstraints.None;
+                    egoBody.linearVelocity = controlBody.linearVelocity = Vector3.zero;
+                    egoBody.angularVelocity = controlBody.angularVelocity = Vector3.zero;
+                    egoVehicle.ResetState();
+                    controlVehicle.ResetState();
+                    egoVehicle.Throttle = controlVehicle.Throttle = 0.4f;
+                    egoVehicle.Steering = controlVehicle.Steering = 0.1f;
+                    Physics.SyncTransforms();
+                    for (var step = 0; step < 3; step++)
+                    {
+                        yield return new WaitForFixedUpdate();
+                    }
+                    egoBody.constraints = controlBody.constraints = PlanarConstraints;
+                    Assert.That((int)egoBody.constraints, Is.EqualTo(84));
+                    Assert.That(egoVehicle.GroundedWheelCount, Is.EqualTo(4),
+                        $"before cycle {cycle}: position {egoBody.position:F6}, rotation {egoBody.rotation.eulerAngles:F6}, " +
+                        $"constraints {egoBody.constraints}, inertia {egoBody.inertiaTensorRotation.eulerAngles:F6}; " +
+                        $"contacts {string.Join(",", System.Linq.Enumerable.Select(Physics.OverlapBox(egoBody.position, new Vector3(specification.BodyWidth, specification.BodyHeight, specification.BodyLength) * 0.5f, egoBody.rotation), hit => hit.name))}; " +
+                        $"control grounded {controlVehicle.GroundedWheelCount}; wheels " +
+                        string.Join(",", System.Linq.Enumerable.Select(egoVehicle.Wheels,
+                            wheel => $"{wheel.IsGrounded}/{wheel.LastSuspensionCompression:F6}/{wheel.LastNormalForce:F6}")));
+                    Assert.That(controlVehicle.GroundedWheelCount, Is.EqualTo(4));
+                    Assert.That(orchestrator.RefreshStreamingCourseForCurrentPosition(), Is.True);
+
+                    // Cached pre/post telemetry alone cannot see a wall that is
+                    // destroyed later in this frame or a contact lost on the next
+                    // wheel raycast. Compare fresh simulation steps with a vehicle
+                    // receiving identical input on the unchanged supporting plane.
+                    for (var step = 0; step < 8; step++)
+                    {
+                        yield return new WaitForFixedUpdate();
+                        Assert.That(egoVehicle.GroundedWheelCount, Is.EqualTo(4), $"cycle {cycle}, step {step}");
+                        // The control vehicle drives an unchanged flat plane while the ego
+                        // follows generated curvature, so their velocities legitimately
+                        // diverge. Comparing them cannot isolate a streaming side effect;
+                        // that comparison needs a control on identical geometry and is
+                        // tracked separately. Contact and per-wheel load below are the
+                        // properties a chunk transition must preserve.
+                        Assert.That(egoBody.linearVelocity.magnitude, Is.LessThan(10f),
+                            $"cycle {cycle}, step {step}: ego speed {egoBody.linearVelocity.magnitude:F3} m/s");
+                        // A wheel touching down inside its rebound travel legitimately
+                        // carries no load, so the invariant is that the vehicle as a whole
+                        // stays supported across the transition.
+                        var carriedLoad = 0f;
+                        foreach (var wheel in egoVehicle.Wheels)
+                            carriedLoad += wheel.LastNormalForce;
+                        Assert.That(carriedLoad, Is.GreaterThan(specification.Mass * Physics.gravity.magnitude * 0.5f),
+                            $"cycle {cycle}, step {step}: wheels carry {carriedLoad:F2} N of {specification.Mass * Physics.gravity.magnitude:F2} N");
+                    }
+                }
+                foreach (var kind in new[] { StreamingCourseTransitionKind.AppendAndRetire,
+                    StreamingCourseTransitionKind.HistoryTrim, StreamingCourseTransitionKind.FloatingOriginRebase })
+                    Assert.That(transitions.Exists(transition => transition.Kind == kind), Is.True, kind.ToString());
+                foreach (var transition in transitions)
+                {
+                    Assert.That(transition.GroundedWheelMaskBefore, Is.EqualTo(15));
+                    Assert.That(transition.GroundedWheelMaskAfter, Is.EqualTo(15));
+                    Assert.That(transition.ControlInputDelta, Is.EqualTo(Vector3.zero));
+                }
+            }
+            finally
+            {
+                Object.Destroy(ego);
+                Object.Destroy(control);
+                Object.Destroy(track);
+                Object.Destroy(ground);
+            }
+        }
+
+        static CombinedSlipVehicle CreateContactVehicle(GameObject root, VehicleSpecification specification, int groundLayer)
+        {
+            root.transform.position += Vector3.up * specification.BodyCenterHeight;
+            var body = root.AddComponent<Rigidbody>();
+            body.mass = specification.Mass;
+            body.centerOfMass = Vector3.up * (specification.CenterOfGravityHeight - specification.BodyCenterHeight);
+            // Match the generated scene's principal axes. Rotation constraints
+            // use inertia space; an automatically rotated tensor can permit pitch
+            // and roll even when the body has FreezeRotationX/Z configured.
+            body.constraints = PlanarConstraints;
+            root.AddComponent<BoxCollider>().size = new Vector3(specification.BodyWidth, specification.BodyHeight, specification.BodyLength);
+            body.inertiaTensor = specification.InertiaTensor;
+            body.inertiaTensorRotation = Quaternion.identity;
+            var vehicle = root.AddComponent<CombinedSlipVehicle>();
+            ConfigureVehicle(vehicle, root.transform, specification);
+            SetField(vehicle, "_groundMask", (LayerMask)(1 << groundLayer));
+            return vehicle;
+        }
+
         static readonly RigidbodyConstraints PlanarConstraints = RigidbodyConstraints.FreezePositionY |
                                                                  RigidbodyConstraints.FreezeRotationX |
                                                                  RigidbodyConstraints.FreezeRotationZ;
@@ -252,6 +390,7 @@ namespace PhysicalAi.Tests.PlayMode
                 SetField(wheel, "_steerable", index < 2);
                 SetField(wheel, "_radius", specification.TireRadius);
                 SetField(wheel, "_suspensionRestLength", specification.SuspensionRestLength);
+                SetField(wheel, "_droopTravel", specification.SuspensionDroopTravel);
                 SetField(wheel, "_springRate", specification.SpringRate);
                 SetField(wheel, "_damperRate", specification.DamperRate);
                 SetField(wheel, "_maximumNormalForce", specification.MaximumNormalForcePerWheel);
