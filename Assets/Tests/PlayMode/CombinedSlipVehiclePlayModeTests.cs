@@ -97,6 +97,54 @@ namespace PhysicalAi.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator ManualInput_DrivesAndSteersTheVehicle()
+        {
+            // EditMode already covers that direct input reaches the actuators, but not
+            // that it produces motion. Manual data collection depends on the whole
+            // path: operator input, actuation, tire forces, body motion.
+            var specification = VehicleSpecification.Default;
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            ground.transform.position = new Vector3(0f, -0.1f, 0f);
+            ground.transform.localScale = new Vector3(200f, 0.2f, 200f);
+
+            var root = new GameObject("TT02ManualInputTest");
+            root.transform.position = new Vector3(0f, specification.BodyCenterHeight, 0f);
+            var body = root.AddComponent<Rigidbody>();
+            body.mass = specification.Mass;
+            body.centerOfMass = Vector3.up * (specification.CenterOfGravityHeight - specification.BodyCenterHeight);
+            body.inertiaTensor = specification.InertiaTensor;
+            body.constraints = PlanarConstraints;
+            var vehicle = root.AddComponent<CombinedSlipVehicle>();
+            ConfigureVehicle(vehicle, root.transform, specification);
+            var planner = root.AddComponent<KeyboardTeleoperationPlanner>();
+            SetField(planner, "_vehicle", vehicle);
+
+            for (var settle = 0; settle < 60; settle++)
+                yield return new WaitForFixedUpdate();
+
+            var startPosition = body.position;
+            for (var step = 0; step < 120; step++)
+            {
+                planner.ApplyDirectInput(1f, 0f);
+                yield return new WaitForFixedUpdate();
+            }
+            var travelled = Vector3.Distance(body.position, startPosition);
+            Assert.That(travelled, Is.GreaterThan(0.2f), $"throttle moved the vehicle {travelled:F3} m");
+
+            var headingBeforeSteering = body.rotation.eulerAngles.y;
+            for (var step = 0; step < 120; step++)
+            {
+                planner.ApplyDirectInput(1f, 1f);
+                yield return new WaitForFixedUpdate();
+            }
+            var headingChange = Mathf.Abs(Mathf.DeltaAngle(headingBeforeSteering, body.rotation.eulerAngles.y));
+            Assert.That(headingChange, Is.GreaterThan(5f), $"steering turned the vehicle {headingChange:F1} degrees");
+
+            Object.Destroy(root);
+            Object.Destroy(ground);
+        }
+
+        [UnityTest]
         public IEnumerator TT02AtRest_DoesNotPumpItsSuspension()
         {
             var specification = VehicleSpecification.Default;
