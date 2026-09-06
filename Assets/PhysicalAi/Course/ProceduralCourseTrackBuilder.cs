@@ -82,8 +82,13 @@ namespace PhysicalAi.Course
                 segment.transform.SetParent(root, false);
                 segment.AddComponent<CourseTrackSegment>().Configure(index, true);
                 var wallMaterial = SegmentCount / _wallStripeSegments % 2 == 0 ? _wallPrimaryMaterial : _wallAlternateMaterial;
-                CreateBoundary(root, $"BoundaryLeft-{SegmentCount:D4}", (start + end) * 0.5f + Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length, wallMaterial).Configure(index, false);
-                CreateBoundary(root, $"BoundaryRight-{SegmentCount:D4}", (start + end) * 0.5f - Vector3.Cross(Vector3.up, direction.normalized) * (_roadWidth * 0.5f) + Vector3.up * (_wallHeight * 0.5f), direction, length, wallMaterial).Configure(index, false);
+                // The wall runs between the corridor edges at the two centreline samples
+                // this segment spans, so the segment before and the segment after share
+                // each edge point exactly. Offsetting a midpoint along one segment's own
+                // normal instead leaves neighbouring walls ending in different places,
+                // which on a minimum-radius corner is a 32 mm step the vehicle catches on.
+                CreateEdgeBoundary(root, $"BoundaryLeft-{SegmentCount:D4}", course, index, +1f, wallMaterial).Configure(index, false);
+                CreateEdgeBoundary(root, $"BoundaryRight-{SegmentCount:D4}", course, index, -1f, wallMaterial).Configure(index, false);
                 SegmentCount++;
             }
             UpdateRoadSurface(root, course);
@@ -185,6 +190,37 @@ namespace PhysicalAi.Course
             for (var index = 0; index < course.Centerline.Count; index++)
                 line.SetPosition(index, course.Centerline[index] + Vector3.up * (RoadVisualLift + 0.003f));
             CenterlineRenderer = line;
+        }
+
+        /// <summary>
+        /// Places one wall span between the corridor edge points of centreline samples
+        /// <c>index - 1</c> and <c>index</c>. Edge points use the averaged normal of the
+        /// segments meeting at a sample, so a sample yields one edge point rather than a
+        /// different one per adjoining segment, and consecutive walls meet exactly.
+        /// </summary>
+        CourseTrackSegment CreateEdgeBoundary(Transform root, string name, GeneratedCourse course, int index, float side, Material material)
+        {
+            var from = CorridorEdgePoint(course, index - 1, side);
+            var to = CorridorEdgePoint(course, index, side);
+            var span = to - from;
+            var length = span.magnitude;
+            var direction = length < 0.0001f ? Vector3.forward : span / length;
+            return CreateBoundary(root, name, (from + to) * 0.5f + Vector3.up * (_wallHeight * 0.5f),
+                direction, length, material);
+        }
+
+        /// <summary>Corridor edge at a centreline sample, using the averaged normal of its neighbouring segments.</summary>
+        Vector3 CorridorEdgePoint(GeneratedCourse course, int index, float side)
+        {
+            var centerline = course.Centerline;
+            var previous = Mathf.Max(0, index - 1);
+            var next = Mathf.Min(centerline.Count - 1, index + 1);
+            var tangent = centerline[next] - centerline[previous];
+            tangent.y = 0f;
+            if (tangent.sqrMagnitude < 1e-8f)
+                tangent = Vector3.forward;
+            var normal = Vector3.Cross(Vector3.up, tangent.normalized);
+            return centerline[index] + normal * (_roadWidth * 0.5f * side);
         }
 
         CourseTrackSegment CreateBoundary(Transform root, string name, Vector3 position, Vector3 direction, float length, Material material)
