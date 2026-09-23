@@ -1,5 +1,7 @@
 # Physical AI
 
+初めて利用する方は [日本語の利用マニュアル](physical-ai-user-guide.md) を参照してください。
+
 Interactive manual driving currently defaults to a temporary **no-slip handling aid**.
 Use `-physicalAiAllowSlip` to restore tire dynamics. Assisted drives cannot certify physical
 handling, but may record explicitly labelled simulator data. The active goal is

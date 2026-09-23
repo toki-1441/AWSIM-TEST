@@ -110,6 +110,7 @@ nav:
     - Experimental:
       - Running headless: DeveloperGuide/Experimental/RunningHeadless/index.md
   - Physical AI:
+    - 利用マニュアル（日本語）: physical-ai-user-guide.md
     - Operator Workflows: physical-ai-operator-workflows.md
     - Overview: physical-ai.md
     - Goals: physical-ai-goals.md

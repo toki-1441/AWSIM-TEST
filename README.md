@@ -11,6 +11,8 @@ AWSIM is the best digital twin simulator for [Autoware](https://github.com/autow
 
 ## Linux batch build
 
+Physical AI の起動・手動走行・RGB／深度／BEV の記録・データ確認・強化学習については、[日本語の利用マニュアル](docs/physical-ai-user-guide.md) を参照してください。
+
 Build a local Linux 64-bit player with:
 
 ```bash
