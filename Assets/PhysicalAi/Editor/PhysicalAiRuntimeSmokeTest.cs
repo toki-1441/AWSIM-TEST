@@ -93,16 +93,16 @@ namespace PhysicalAi.Editor
                     transition.LinearVelocityDelta.sqrMagnitude > 0.00000001f ||
                     transition.AngularVelocityDelta.sqrMagnitude > 0.00000001f ||
                     transition.ControlInputDelta.sqrMagnitude > 0.000000000001f ||
-                    transition.GroundContactChanged ||
-                    transition.MaximumSuspensionCompressionDelta > 0.000001f ||
-                    transition.MaximumSuspensionVelocityDelta > 0.000001f)
+                    transition.ActualSteeringAngleDelta > 0.000001f ||
+                    transition.MaximumAxleForceDelta > 0.000001f ||
+                    transition.DynamicWeightDelta > 0.000001f)
                     throw new System.InvalidOperationException(
                         $"{transition.Kind} changed vehicle state: unexpected position {transition.UnexpectedPositionDelta}, " +
                         $"rotation {transition.RotationDeltaDegrees:F5}°, velocity {transition.LinearVelocityDelta}, angular {transition.AngularVelocityDelta}, " +
                         $"source {transition.CommandSource}, control {transition.ControlInputBefore}->{transition.ControlInputAfter}, " +
-                        $"ground mask {transition.GroundedWheelMaskBefore:X}->{transition.GroundedWheelMaskAfter:X}, " +
-                        $"suspension compression {transition.MaximumSuspensionCompressionDelta:F6} m, " +
-                        $"suspension velocity {transition.MaximumSuspensionVelocityDelta:F6} m/s.");
+                        $"model planar-single-track, actual steering {transition.ActualSteeringAngleBefore:F6}->{transition.ActualSteeringAngleAfter:F6} rad, " +
+                        $"axle force delta {transition.MaximumAxleForceDelta:F6} N, " +
+                        $"dynamic weight delta {transition.DynamicWeightDelta:F6}.");
                 if (transition.RetainedWaypointCount < 2 || transition.ForwardWaypointCount < 0 || transition.ChunkCount < 1)
                     throw new System.InvalidOperationException(
                         $"{transition.Kind} omitted streaming horizon evidence (retained {transition.RetainedWaypointCount}, " +

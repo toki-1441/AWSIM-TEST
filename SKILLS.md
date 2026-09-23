@@ -35,10 +35,16 @@ The helper is intentionally local-only: it does not deploy or publish artifacts.
 
 ## Manual streaming acceptance
 
+Interactive keyboard driving currently defaults to a temporary no-slip handling aid. This is
+not physical-model acceptance. The active operator-workflow goal permits labelled assisted
+datasets; do not confuse their validity as simulator data with real-car fidelity. Use the player
+normally for assisted handling checks; `-physicalAiAllowSlip` restores the physical tire model.
+The manual evidence launcher accepts `PHYSICAL_AI_ALLOW_SLIP=1` for physical-model acceptance:
+
 Use the rebuilt Linux player and the evidence launcher from the repository root:
 
 ```bash
-scripts/run_manual_streaming_validation.sh Build/validation/manual-streaming-001
+PHYSICAL_AI_ALLOW_SLIP=1 scripts/run_manual_streaming_validation.sh Build/validation/manual-streaming-001
 ```
 
 Drive with WASD or the arrow keys through at least three append operations, a history trim and a
@@ -49,9 +55,14 @@ template. After reviewing the video, complete that template and run the finaliza
 
 Only a report whose transitions identify `manual-teleoperation` may satisfy this gate. Automated
 reference-driver output is useful regression evidence but must not be presented as a human drive.
-The final report also requires unchanged pose/velocity, control input, grounded-wheel mask and
-suspension state at every world-management event, both turn directions, a nonempty forward horizon,
+The planar single-track report (schema 2) requires unchanged pose/velocity, control input,
+actual steering actuator state, axle-force telemetry and dynamic blend state at every
+world-management event, both turn directions, a nonempty forward horizon,
 the video, and all visual/handling checks.
+The model has no wheel-contact or suspension states; do not fabricate those fields or reuse
+legacy wheel-model logs as evidence for the replacement. Axle normal loads are analytical,
+not measured contacts. Immediate transition checks still require the subsequent-drive video
+and collision checks; zero deltas alone cannot demonstrate a driveable corridor.
 
 ## Confidential references
 

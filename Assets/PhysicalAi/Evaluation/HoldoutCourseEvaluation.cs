@@ -32,6 +32,26 @@ namespace PhysicalAi.Evaluation
                 seeds[index] = first + index;
             return seeds;
         }
+
+        /// <summary>Operator seed controls the first episode; resume advances the same training-only sequence.</summary>
+        public static int[] OperatorRolloutSeeds(int baseSeed, int completedEpisodes, int count)
+        {
+            if (baseSeed < 0 || completedEpisodes < 0 || count < 1 || count > 999 ||
+                Seeds.Contains(baseSeed) || TrainingEvaluationSeeds.Contains(baseSeed))
+                throw new ArgumentException("Choose a nonnegative training seed outside the reserved evaluation seeds, and 1..999 episodes.");
+            var output = new List<int>();
+            long candidate = baseSeed;
+            var skipped = 0;
+            while (output.Count < count)
+            {
+                if (candidate > int.MaxValue) throw new ArgumentException("Training seed sequence exhausted.");
+                var seed = (int)candidate++;
+                if (Seeds.Contains(seed) || TrainingEvaluationSeeds.Contains(seed)) continue;
+                if (skipped++ < completedEpisodes) continue;
+                output.Add(seed);
+            }
+            return output.ToArray();
+        }
     }
 
     [Serializable]

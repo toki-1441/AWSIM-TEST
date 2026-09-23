@@ -1,0 +1,6 @@
+{
+    "name": "PhysicalAi.Configuration",
+    "rootNamespace": "PhysicalAi.Configuration",
+    "references": [],
+    "autoReferenced": true
+}

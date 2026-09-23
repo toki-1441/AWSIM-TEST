@@ -19,7 +19,7 @@ namespace PhysicalAi.Planning
         [SerializeField, Min(0f)] float _velocityTolerance = 0.001f;
         [SerializeField, Min(0f)] float _angularVelocityTolerance = 0.001f;
         [SerializeField, Min(0f)] float _controlInputTolerance = 0.000001f;
-        [SerializeField, Min(0f)] float _suspensionTolerance = 0.000001f;
+        [SerializeField, Min(0f)] float _modelStateTolerance = 0.000001f;
 
         public int TransitionCount { get; private set; }
         public int DiscontinuityCount { get; private set; }
@@ -48,9 +48,9 @@ namespace PhysicalAi.Planning
                                velocityError > _velocityTolerance ||
                                angularVelocityError > _angularVelocityTolerance ||
                                controlInputError > _controlInputTolerance ||
-                               transition.GroundContactChanged ||
-                               transition.MaximumSuspensionCompressionDelta > _suspensionTolerance ||
-                               transition.MaximumSuspensionVelocityDelta > _suspensionTolerance;
+                               transition.ActualSteeringAngleDelta > 0.000001f ||
+                               transition.MaximumAxleForceDelta > _modelStateTolerance ||
+                               transition.DynamicWeightDelta > _modelStateTolerance;
             if (discontinuous)
             {
                 DiscontinuityCount++;
@@ -60,9 +60,9 @@ namespace PhysicalAi.Planning
                                $"source {transition.CommandSource}, " +
                                $"control input {FormatVector(transition.ControlInputBefore)}->{FormatVector(transition.ControlInputAfter)}, " +
                                $"control delta {controlInputError:F6}, " +
-                               $"ground mask {transition.GroundedWheelMaskBefore:X}->{transition.GroundedWheelMaskAfter:X}, " +
-                               $"suspension compression {transition.MaximumSuspensionCompressionDelta:F6} m, " +
-                               $"suspension velocity {transition.MaximumSuspensionVelocityDelta:F6} m/s; " +
+                               $"model {_orchestrator.VehicleModelName}, actual steering {transition.ActualSteeringAngleBefore:F6}->{transition.ActualSteeringAngleAfter:F6} rad, " +
+                               $"axle force delta {transition.MaximumAxleForceDelta:F6} N, " +
+                               $"dynamic weight delta {transition.DynamicWeightDelta:F6}; " +
                                $"retained {transition.RetainedWaypointCount}, forward {transition.ForwardWaypointCount}, " +
                                $"chunks {transition.ChunkCount}, appended corner {CornerLabel(transition.AppendedCornerDirection)}.");
                 return;
@@ -74,9 +74,9 @@ namespace PhysicalAi.Planning
                       $"source {transition.CommandSource}, " +
                       $"control input {FormatVector(transition.ControlInputBefore)}->{FormatVector(transition.ControlInputAfter)}, " +
                       $"control delta {controlInputError:F6}, " +
-                      $"ground mask {transition.GroundedWheelMaskBefore:X}->{transition.GroundedWheelMaskAfter:X}, " +
-                      $"suspension compression {transition.MaximumSuspensionCompressionDelta:F6} m, " +
-                      $"suspension velocity {transition.MaximumSuspensionVelocityDelta:F6} m/s; " +
+                      $"model {_orchestrator.VehicleModelName}, actual steering {transition.ActualSteeringAngleBefore:F6}->{transition.ActualSteeringAngleAfter:F6} rad, " +
+                      $"axle force delta {transition.MaximumAxleForceDelta:F6} N, " +
+                      $"dynamic weight delta {transition.DynamicWeightDelta:F6}; " +
                       $"retained {transition.RetainedWaypointCount}, forward {transition.ForwardWaypointCount}, " +
                       $"chunks {transition.ChunkCount}, appended corner {CornerLabel(transition.AppendedCornerDirection)}.");
         }

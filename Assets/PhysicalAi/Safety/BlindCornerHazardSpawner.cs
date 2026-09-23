@@ -84,15 +84,7 @@ namespace PhysicalAi.Safety
 
         float RequestedSpawnProbability()
         {
-            var arguments = Environment.GetCommandLineArgs();
-            for (var index = 0; index + 1 < arguments.Length; index++)
-            {
-                if (arguments[index] != "-physicalAiHazardProbability")
-                    continue;
-                if (float.TryParse(arguments[index + 1], out var probability))
-                    return Mathf.Clamp01(probability);
-            }
-            return _spawnProbability;
+            return Mathf.Clamp01(PhysicalAi.Configuration.RuntimeArguments.GetFloat("-physicalAiHazardProbability", _spawnProbability));
         }
     }
 }

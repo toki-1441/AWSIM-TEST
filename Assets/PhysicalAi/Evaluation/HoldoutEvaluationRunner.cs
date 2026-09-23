@@ -24,6 +24,8 @@ namespace PhysicalAi.Evaluation
         bool _timedOut;
         bool _trainingDistribution;
         string _policyLabel;
+        PythonRlBridge _bridge;
+        bool _cancelled;
         public event Action<HoldoutEvaluationReport> EvaluationCompleted;
         /// <summary>Raised after an episode is measured and before the next seed is reset.</summary>
         public event Action<CourseEpisodeResult> EpisodeMeasured;
@@ -35,6 +37,12 @@ namespace PhysicalAi.Evaluation
 
         void OnEnable()
         {
+            _bridge = GetComponent<PythonRlBridge>();
+            if (_bridge != null)
+            {
+                _bridge.TrainingRequested += RunTrainingRollouts;
+                _bridge.TrainingCancelled += CancelSuite;
+            }
             if (_orchestrator != null)
                 _orchestrator.EpisodeFinished += OnEpisodeFinished;
         }
@@ -45,6 +53,9 @@ namespace PhysicalAi.Evaluation
             // its finite course after that initialization, otherwise Unity's
             // unspecified Start ordering can restore the streaming training map.
             yield return null;
+            // Managed training starts only after the trainer handshake; the operator can restart/resume it later.
+            if (PhysicalAiLaunchArguments.GetValue("-physicalAiRlManaged") == "true") yield break;
+            if (PhysicalAiLaunchArguments.HasFlag("-physicalAiRlPort") && (_bridge == null || !_bridge.IsConnected)) yield break;
             // Player builds can run a reproducible suite without editing the scene:
             // -physicalAiEvaluation holdout | training.
             var maximumSeconds = GetCommandLineArg("-physicalAiMaximumEpisodeSeconds");
@@ -63,13 +74,18 @@ namespace PhysicalAi.Evaluation
 
         void OnDisable()
         {
+            if (_bridge != null)
+            {
+                _bridge.TrainingRequested -= RunTrainingRollouts;
+                _bridge.TrainingCancelled -= CancelSuite;
+            }
             if (_orchestrator != null)
                 _orchestrator.EpisodeFinished -= OnEpisodeFinished;
         }
 
         void Update()
         {
-            if (_session != null && _session.HasActiveEpisode && !_timedOut && Time.time - _episodeStartTime >= _maximumEpisodeSeconds)
+            if (!_cancelled && _session != null && _session.HasActiveEpisode && !_timedOut && Time.time - _episodeStartTime >= _maximumEpisodeSeconds)
             {
                 _timedOut = true;
                 _orchestrator.EndEpisode(false, false, true);
@@ -91,8 +107,13 @@ namespace PhysicalAi.Evaluation
         {
             var round = GetCommandLineInt("-physicalAiTrainingRound", 0);
             var count = GetCommandLineInt("-physicalAiEpisodeCount", HoldoutCourseSuite.TrainingEvaluationSeeds.Length);
-            Run(true, HoldoutCourseSuite.TrainingRolloutSeeds(round, count));
+            _maximumEpisodeSeconds = PhysicalAiLaunchArguments.GetFloat("-physicalAiMaximumEpisodeSeconds", _maximumEpisodeSeconds);
+            Run(true, PhysicalAiLaunchArguments.GetValue("-physicalAiMode") == "rl"
+                ? HoldoutCourseSuite.OperatorRolloutSeeds(PhysicalAiLaunchArguments.GetInt("-physicalAiSeed", 1), _bridge?.CompletedEpisodes ?? 0, count)
+                : HoldoutCourseSuite.TrainingRolloutSeeds(round, count));
         }
+
+        public void CancelSuite() { _cancelled = true; StopAllCoroutines(); }
 
         void Run(bool trainingDistribution, IReadOnlyList<int> seeds)
         {
@@ -100,6 +121,9 @@ namespace PhysicalAi.Evaluation
                 throw new InvalidOperationException("Assign a PhysicalAiEpisodeOrchestrator before running evaluation.");
             if (seeds == null || seeds.Count == 0)
                 throw new ArgumentException("At least one episode seed is required.", nameof(seeds));
+            if (PhysicalAiLaunchArguments.HasFlag("-physicalAiRlPort") && (_bridge == null || !_bridge.IsConnected))
+                throw new InvalidOperationException("RL evaluation requires a connected trainer; no fallback rollout is permitted.");
+            _cancelled = false;
             _trainingDistribution = trainingDistribution;
             // Generalisation metrics are solo driving metrics.  A racing opponent
             // is evaluated in its own opt-in scenario so it cannot turn every
@@ -131,10 +155,12 @@ namespace PhysicalAi.Evaluation
 
         void StartNextEpisode()
         {
+            if (_cancelled) return;
             if (_nextSeedIndex >= _seeds.Count)
             {
                 EvaluationCompleted?.Invoke(_session.BuildReport());
-                if (GetCommandLineArg("-physicalAiQuitAfterEvaluation") != null)
+                if (_bridge != null && _bridge.IsManaged) _bridge.NotifyTrainingCompleted();
+                if (PhysicalAiLaunchArguments.HasFlag("-physicalAiQuitAfterEvaluation"))
                     Application.Quit();
                 return;
             }
@@ -142,13 +168,14 @@ namespace PhysicalAi.Evaluation
             _episodeStartTime = Time.time;
             _timedOut = false;
             _session.BeginEpisode(seed, _episodeStartTime);
-            if (_trainingDistribution) _orchestrator.ResetFiniteTrainingEpisode(seed);
+            if (_trainingDistribution && PhysicalAiLaunchArguments.GetValue("-physicalAiMapMode") != null) _orchestrator.ResetEpisode(seed);
+            else if (_trainingDistribution) _orchestrator.ResetFiniteTrainingEpisode(seed);
             else _orchestrator.ResetHoldoutEpisode(seed);
         }
 
         void OnEpisodeFinished(bool completed, bool collision, bool offCourse)
         {
-            if (_session == null || !_session.HasActiveEpisode)
+            if (_cancelled || _session == null || !_session.HasActiveEpisode)
                 return;
             var result = _session.CompleteEpisode(completed, collision, offCourse, Time.time,
                 _orchestrator.LastCollisionWasBlindCornerHazard, _orchestrator.LastCollisionWasOpponent, _timedOut,
@@ -156,16 +183,19 @@ namespace PhysicalAi.Evaluation
                 _orchestrator.EgoOvertakeCount, _orchestrator.OpponentOvertakeCount,
                 _orchestrator.HazardWasSpawned);
             EpisodeMeasured?.Invoke(result);
+            // All terminal listeners (especially the trainer checkpoint ACK) must finish before resetting.
+            StartCoroutine(AdvanceAfterTerminal(_session));
+        }
+
+        IEnumerator AdvanceAfterTerminal(HoldoutEvaluationSession session)
+        {
+            yield return null;
+            if (_cancelled || _session != session) yield break;
+            if (PhysicalAiLaunchArguments.HasFlag("-physicalAiRlPort") && (_bridge == null || !_bridge.IsConnected)) yield break;
             StartNextEpisode();
         }
 
-        static string GetCommandLineArg(string parameter)
-        {
-            var arguments = Environment.GetCommandLineArgs();
-            for (var index = 0; index + 1 < arguments.Length; index++)
-                if (arguments[index] == parameter) return arguments[index + 1];
-            return null;
-        }
+        static string GetCommandLineArg(string parameter) => PhysicalAiLaunchArguments.GetValue(parameter);
 
         static int GetCommandLineInt(string parameter, int fallback)
         {
@@ -186,7 +216,7 @@ namespace PhysicalAi.Evaluation
 
         static bool HasCommandLineFlag(string parameter)
         {
-            foreach (var argument in Environment.GetCommandLineArgs())
+            foreach (var argument in PhysicalAiLaunchArguments.Current)
                 if (argument == parameter) return true;
             return false;
         }

@@ -1,5 +1,12 @@
 # Offline behavior cloning
 
+Operator-workflow recordings now use `teleop-<time>-<id>/frames.jsonl`, with a manifest and
+event/map log beside it. Keep the whole directory. The exporter discovers both this format
+and legacy flat recordings, and carries vehicle/action-space metadata. See
+[operator workflows](physical-ai-operator-workflows.md) for inspection and the important
+distinction between raw manual actuation and valid planning targets; exporting the legacy
+manual proxy alone is not proof of a correct planning-learning dataset.
+
 `PlanningDemonstrationRecorder` writes one JSON object per line. Train a linear
 planning model without additional Python packages:
 

@@ -2,6 +2,7 @@
     "name": "PhysicalAi.Planning",
     "rootNamespace": "PhysicalAi.Planning",
     "references": [
+        "PhysicalAi.Configuration",
         "PhysicalAi.Course",
         "PhysicalAi.Racing",
         "PhysicalAi.Safety",

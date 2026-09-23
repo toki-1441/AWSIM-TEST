@@ -4,11 +4,28 @@
 using System;
 using System.IO;
 using System.Net.Sockets;
+using PhysicalAi.Course;
 using PhysicalAi.Sensors;
+using PhysicalAi.VehicleDynamics;
+using PhysicalAi.Randomization;
 using UnityEngine;
 
 namespace PhysicalAi.Planning
 {
+    [Serializable]
+    public class RlEnvironmentContract
+    {
+        public int schemaVersion = 1;
+        public string observationSchema = "planning-vector-v1:4+5-per-waypoint;RGB160x90-policy-input;depth-and-BEV-are-separate-ground-truth-targets";
+        public string actionSchema = "planning-desired-speed-mps-and-normalized-lateral-offset";
+        public string mapMode, mapSourceHash, courseSettings, vehicleModel, vehicleSpecification, scenario, randomizationSettings;
+        public int baseSeed, cameraWidth, cameraHeight, cameraHz, bevSize;
+        public float fixedStepSeconds, maximumEpisodeSeconds, depthMaxMeters, bevMetersPerPixel, frictionScale;
+        public bool depth, bev;
+        public Vector3 cameraLocalPosition;
+        public Quaternion cameraLocalRotation;
+    }
+
     /// <summary>Single-environment JSON-lines TCP bridge for a Python RL policy process.</summary>
     public sealed class PythonRlBridge : MonoBehaviour
     {
@@ -31,19 +48,45 @@ namespace PhysicalAi.Planning
         bool _loggedFirstRequest;
         bool _loggedFirstWrite;
         float _nextDecisionTime;
+        bool _managed;
+        int _cameraFrameIndex;
+        float _cameraSimulationTime;
+        bool _requested;
+        public bool IsConnected => _connected;
+        public bool IsManaged => _managed;
+        public string LastError { get; private set; }
+        public int CompletedEpisodes { get; private set; }
+        public event Action TrainingRequested;
+        public event Action TrainingCancelled;
+        public event Action TrainingCompleted;
         /// <summary>Number of rendered camera frames converted to JPEG for this bridge lifetime.</summary>
         public int CameraFramesCaptured { get; private set; }
         /// <summary>Number of camera frames intentionally withheld by the image ablation.</summary>
         public int CameraFramesWithheld { get; private set; }
 
-        [Serializable] class Request { public string type; public float[] observation; public string cameraJpegBase64; public float reward; public bool terminal; }
-        [Serializable] class Response { public float desiredSpeed; public float desiredLateralOffsetNormalized; }
+        [Serializable] class Request { public string type; public float[] observation; public string cameraJpegBase64; public float reward; public bool terminal; public string reason; public RlEnvironmentContract environment;
+            public int episodeId, cameraFrameIndex; public float simulationTime, cameraSimulationTime; }
+        [Serializable] class Response { public float desiredSpeed; public float desiredLateralOffsetNormalized; public bool ack; public int completedEpisodes; public string error; }
+
+        void Awake()
+        {
+            if (_orchestrator == null) _orchestrator = GetComponent<PhysicalAiEpisodeOrchestrator>();
+            _managed = GetCommandLineArg("-physicalAiRlManaged") == "true";
+            _requested = _managed || HasCommandLineArgument("-physicalAiRlPort") || GetCommandLineArg("-physicalAiMode") == "rl";
+            _port = PhysicalAiLaunchArguments.GetInt("-physicalAiRlPort", _port);
+        }
 
         void Start()
         {
             // Keep the authored scene disconnected by default.  A player build can opt in
             // without changing scene YAML: -physicalAiRlPort 5015.
             _imageBlackout = HasCommandLineArgument("-physicalAiImageBlackout");
+            if (_managed)
+            {
+                Time.timeScale = 0;
+                gameObject.AddComponent<OperatorRlSession>();
+                return;
+            }
             var port = GetCommandLineArg("-physicalAiRlPort");
             if (int.TryParse(port, out var requestedPort) && requestedPort > 0)
             {
@@ -67,6 +110,7 @@ namespace PhysicalAi.Planning
             _orchestrator.EpisodeFinished += OnEpisodeFinished;
             _orchestrator.StepRewardReady += OnStepReward;
             _orchestrator.CameraObservationReady += OnCameraObservation;
+            _orchestrator.CourseGenerated += OnCourseGenerated;
         }
 
         void OnDisable()
@@ -76,6 +120,7 @@ namespace PhysicalAi.Planning
                 _orchestrator.EpisodeFinished -= OnEpisodeFinished;
                 _orchestrator.StepRewardReady -= OnStepReward;
                 _orchestrator.CameraObservationReady -= OnCameraObservation;
+                _orchestrator.CourseGenerated -= OnCourseGenerated;
                 if (_orchestrator.CommandProvider == RequestCommand) _orchestrator.CommandProvider = null;
             }
             Disconnect();
@@ -84,6 +129,7 @@ namespace PhysicalAi.Planning
         public bool Connect()
         {
             Disconnect();
+            LastError = null;
             try
             {
                 _client = new TcpClient();
@@ -94,24 +140,112 @@ namespace PhysicalAi.Planning
                 // faster. Keep the synchronous planning contract but permit that
                 // bounded startup cost.
                 _client.ReceiveTimeout = 10000;
-                _client.Connect(_host, _port);
+                if (!_client.ConnectAsync(_host, _port).Wait(2000)) throw new IOException("Connection timed out.");
                 var stream = _client.GetStream();
                 _reader = new StreamReader(stream);
                 _writer = new StreamWriter(stream) { AutoFlush = true };
+                if (_managed)
+                {
+                    _writer.WriteLine(JsonUtility.ToJson(new Request { type = "hello", environment = EnvironmentContract() }));
+                    ReadAcknowledgement();
+                }
                 _connected = true;
                 if (_orchestrator != null) _orchestrator.CommandProvider = RequestCommand;
                 return true;
             }
-            catch (SocketException)
+            catch (Exception error) when (error is SocketException || error is IOException || error is AggregateException || error is ArgumentException)
             {
-                Disconnect();
+                PauseWithError(error.GetBaseException().Message);
                 return false;
             }
         }
 
+        public RlEnvironmentContract EnvironmentContract()
+        {
+            var sensor = GetComponentInChildren<CameraObservationSensor>();
+            return new RlEnvironmentContract
+            {
+                mapMode = _orchestrator.MapMode, mapSourceHash = _orchestrator.MapSourceHash ?? "seed-generated",
+                courseSettings = _orchestrator.CourseSettingsJson, vehicleModel = _orchestrator.VehicleModelName,
+                vehicleSpecification = JsonUtility.ToJson(GetComponent<CombinedSlipVehicle>().Specification),
+                randomizationSettings = JsonUtility.ToJson(GetComponent<DomainRandomizer>().Settings),
+                frictionScale = GetComponent<DomainRandomizer>().FrictionScale,
+                scenario = GetCommandLineArg("-physicalAiDemonstrationScenario") ?? "nominal",
+                baseSeed = PhysicalAiLaunchArguments.GetInt("-physicalAiSeed", _orchestrator.EpisodeSeed),
+                cameraWidth = sensor.LatestImage.width, cameraHeight = sensor.LatestImage.height,
+                cameraLocalPosition = sensor.transform.localPosition, cameraLocalRotation = sensor.transform.localRotation,
+                cameraHz = PhysicalAiLaunchArguments.GetInt("-physicalAiCameraHz", 15), fixedStepSeconds = Time.fixedDeltaTime,
+                maximumEpisodeSeconds = PhysicalAiLaunchArguments.GetFloat("-physicalAiMaximumEpisodeSeconds", 120),
+                depth = GetCommandLineArg("-physicalAiDepth") == "true", bev = GetCommandLineArg("-physicalAiBev") == "true",
+                depthMaxMeters = PhysicalAiLaunchArguments.GetFloat("-physicalAiDepthMaxMeters", 30),
+                bevSize = PhysicalAiLaunchArguments.GetInt("-physicalAiBevSize", 128),
+                bevMetersPerPixel = PhysicalAiLaunchArguments.GetFloat("-physicalAiBevMetersPerPixel", 0.1f)
+            };
+        }
+
+        public void StartTrainingEpisodes()
+        {
+            if (!_connected || TrainingRequested == null) throw new InvalidOperationException("Connected bridge and evaluation runner are required.");
+            TrainingRequested.Invoke();
+        }
+        public void NotifyTrainingCompleted() => TrainingCompleted?.Invoke();
+        public void StopTraining()
+        {
+            Time.timeScale = 0;
+            TrainingCancelled?.Invoke();
+            if (_connected)
+            {
+                try
+                {
+                    _writer.WriteLine(JsonUtility.ToJson(new Request { type = "stop", reward = _pendingReward, reason = "operator-stop" }));
+                    ReadAcknowledgement();
+                    _pendingReward = 0;
+                }
+                catch (Exception error) when (error is IOException || error is ArgumentException) { PauseWithError(error.Message); }
+            }
+            Disconnect();
+        }
+
+        void OnCourseGenerated(GeneratedCourse course)
+        {
+            _pendingReward = 0;
+            _lastCommand = default;
+            _latestCameraJpeg = null;
+            _nextDecisionTime = 0;
+        }
+
+        Response ReadResponse()
+        {
+            var line = _reader.ReadLine();
+            if (string.IsNullOrEmpty(line)) throw new IOException("Trainer closed the connection.");
+            var response = JsonUtility.FromJson<Response>(line);
+            if (response == null) throw new IOException("Invalid trainer response.");
+            if (!string.IsNullOrEmpty(response.error)) throw new IOException(response.error);
+            if (!response.ack && (!line.Contains("\"desiredSpeed\"") || !line.Contains("\"desiredLateralOffsetNormalized\"")))
+                throw new IOException("Trainer response is missing action fields.");
+            return response;
+        }
+        void ReadAcknowledgement()
+        {
+            var response = ReadResponse();
+            if (!response.ack) throw new IOException("Trainer did not acknowledge saved state.");
+            CompletedEpisodes = response.completedEpisodes;
+        }
+
+        void PauseWithError(string message)
+        {
+            LastError = "RL stopped: " + message;
+            Disconnect();
+            _lastCommand = default;
+            if (_requested) Time.timeScale = 0;
+            Debug.LogWarning(LastError);
+            if (PhysicalAiLaunchArguments.HasFlag("-physicalAiQuitAfterEvaluation")) Application.Quit(2);
+        }
+
         PlanningCommand RequestCommand(PlanningObservation observation)
         {
-            if (!_connected) return _lastCommand;
+            if (!_connected) return default;
+            if (_managed && string.IsNullOrEmpty(_latestCameraJpeg)) return default;
             if (Time.fixedTime + 0.0001f < _nextDecisionTime) return _lastCommand;
             if (!_loggedFirstRequest)
             {
@@ -120,19 +254,17 @@ namespace PhysicalAi.Planning
             }
             try
             {
-                _writer.WriteLine(JsonUtility.ToJson(new Request { type = "step", observation = observation.Features, cameraJpegBase64 = _latestCameraJpeg, reward = _pendingReward, terminal = false }));
+                _writer.WriteLine(JsonUtility.ToJson(new Request { type = "step", observation = observation.Features, cameraJpegBase64 = _latestCameraJpeg, reward = _pendingReward, terminal = false,
+                    episodeId = _orchestrator.EpisodeSeed, simulationTime = Time.time, cameraFrameIndex = _cameraFrameIndex, cameraSimulationTime = _cameraSimulationTime }));
                 if (!_loggedFirstWrite)
                 {
                     Debug.Log("Physical AI RL bridge: first request written; waiting for action.");
                     _loggedFirstWrite = true;
                 }
-                var line = _reader.ReadLine();
-                var response = string.IsNullOrEmpty(line) ? null : JsonUtility.FromJson<Response>(line);
-                if (response == null)
-                {
-                    Disconnect();
-                    return _lastCommand;
-                }
+                var response = ReadResponse();
+                if (response.ack) throw new IOException("Trainer sent an acknowledgement instead of an action.");
+                if (!float.IsFinite(response.desiredSpeed) || !float.IsFinite(response.desiredLateralOffsetNormalized))
+                    throw new IOException("Trainer returned a nonfinite action.");
                 _pendingReward = 0f;
                 _nextDecisionTime = Time.fixedTime + _decisionPeriodSeconds;
                 _lastCommand = new PlanningCommand
@@ -141,7 +273,7 @@ namespace PhysicalAi.Planning
                     DesiredLateralOffsetNormalized = Mathf.Clamp(response.desiredLateralOffsetNormalized, -1f, 1f)
                 };
             }
-            catch (IOException) { Disconnect(); }
+            catch (Exception error) when (error is IOException || error is ArgumentException) { PauseWithError(error.Message); }
             return _lastCommand;
         }
 
@@ -151,16 +283,21 @@ namespace PhysicalAi.Planning
             try
             {
                 Debug.Log("Physical AI RL bridge: sending terminal transition.");
-                _writer.WriteLine(JsonUtility.ToJson(new Request { type = "terminal", reward = _pendingReward, terminal = true }));
+                _writer.WriteLine(JsonUtility.ToJson(new Request { type = "terminal", reward = _pendingReward, terminal = true,
+                    reason = completed ? "completed" : collision ? "collision" : offCourse ? "off-course" : "timeout" }));
                 // The evaluation runner may quit the player immediately after this
                 // callback. Wait for the trainer to persist its terminal update so a
                 // valid rollout cannot lose its checkpoint or learning-curve point.
-                _reader.ReadLine();
+                ReadAcknowledgement();
+                _pendingReward = 0;
+                _lastCommand = default;
+                _latestCameraJpeg = null;
+                _nextDecisionTime = 0;
             }
-            catch (IOException) { Disconnect(); }
+            catch (Exception error) when (error is IOException || error is ArgumentException) { PauseWithError(error.Message); }
         }
 
-        void OnStepReward(float reward) => _pendingReward += reward;
+        void OnStepReward(float reward) { if (_connected) _pendingReward += reward; }
 
         void OnCameraObservation(CameraObservationFrame frame)
         {
@@ -192,6 +329,8 @@ namespace PhysicalAi.Planning
             _cameraReadback.Apply(false);
             RenderTexture.active = previous;
             _latestCameraJpeg = Convert.ToBase64String(_cameraReadback.EncodeToJPG(75));
+            _cameraFrameIndex = frame.FrameIndex;
+            _cameraSimulationTime = frame.SimulationTime;
             CameraFramesCaptured++;
             if (!_loggedFirstCameraFrame)
             {
@@ -209,26 +348,29 @@ namespace PhysicalAi.Planning
             _nextDecisionTime = 0f;
             if (_orchestrator != null && _orchestrator.CommandProvider == RequestCommand)
                 _orchestrator.CommandProvider = null;
-            _reader?.Dispose(); _writer?.Dispose(); _client?.Dispose();
+            try { _writer?.Dispose(); } catch (IOException) { }
+            try { _reader?.Dispose(); } catch (IOException) { }
+            _client?.Dispose();
             _reader = null; _writer = null; _client = null;
         }
 
         void OnDestroy()
         {
             if (_cameraReadback != null) Destroy(_cameraReadback);
+            if (_requested) Time.timeScale = 1;
         }
 
-        static string GetCommandLineArg(string parameter)
+        void OnGUI()
         {
-            var arguments = Environment.GetCommandLineArgs();
-            for (var index = 0; index + 1 < arguments.Length; index++)
-                if (arguments[index] == parameter) return arguments[index + 1];
-            return null;
+            if (!_managed && _requested && LastError != null)
+                GUI.Box(new Rect(12, 12, Mathf.Min(700, Screen.width - 24), 80), LastError + "\nSimulation paused; no fallback policy is driving.");
         }
+
+        static string GetCommandLineArg(string parameter) => PhysicalAiLaunchArguments.GetValue(parameter);
 
         static bool HasCommandLineArgument(string parameter)
         {
-            foreach (var argument in Environment.GetCommandLineArgs())
+            foreach (var argument in PhysicalAiLaunchArguments.Current)
                 if (argument == parameter) return true;
             return false;
         }

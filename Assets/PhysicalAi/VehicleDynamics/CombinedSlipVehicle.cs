@@ -2,314 +2,205 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace PhysicalAi.VehicleDynamics
 {
     /// <summary>
-    /// Four-wheel vehicle physics based on ray-cast suspension and a
-    /// combined-slip Pacejka tire model. This component deliberately does not
-    /// use WheelCollider: suspension contact and every tire force are explicit.
+    /// Compatibility component name; now a PhysX adapter for planar single-track tire dynamics. PhysX owns pose and velocity, including
+    /// collision response. Only steering actuator state persists between tire steps.
+    /// Manual driving can opt into a separate velocity-constrained no-slip aid.
+    /// Positive public steering means right, matching the existing keyboard/ROS2 interface.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
+    [DisallowMultipleComponent]
+    [DefaultExecutionOrder(100)]
     public sealed class CombinedSlipVehicle : MonoBehaviour
     {
-        [Serializable]
-        public sealed class Wheel
+        [SerializeField] VehicleSpecification _specification = VehicleSpecification.Default;
+        [SerializeField, Min(0.01f)] float _maximumSteeringRate = 3.2f;
+        [SerializeField, Range(-1f, 1f)] float _throttle;
+        [SerializeField, Range(0f, 1f)] float _brake;
+        [SerializeField, Range(-1f, 1f)] float _steering;
+        [SerializeField, Min(0f)] float _surfaceFriction = 0.9f;
+
+        Rigidbody _body;
+        SingleTrackVehicleModel _model;
+        double _actualSteeringRadians;
+
+        // Temporary handling aid, selected by the manual driver only. Not a tire model.
+        public bool NoSlipAssistance { get; set; }
+        public string VehicleModelName => NoSlipAssistance ? "planar-no-slip-assist" : "planar-single-track";
+
+        public const RigidbodyConstraints PlanarMotionConstraints = RigidbodyConstraints.FreezePositionY |
+            RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+        public float Throttle { get => _throttle; set => _throttle = FiniteClamp(value, -1, 1); }
+        public float Brake { get => _brake; set => _brake = FiniteClamp(value, 0, 1); }
+        public float Steering { get => _steering; set => _steering = FiniteClamp(value, -1, 1); }
+        public float SurfaceFriction { get => _surfaceFriction; set => _surfaceFriction = FiniteClamp(value, 0, float.MaxValue); }
+        public float ActualSteeringAngleRadians => (float)-_actualSteeringRadians;
+        public SingleTrackAxleForce FrontAxleForce { get; private set; }
+        public SingleTrackAxleForce RearAxleForce { get; private set; }
+        public float DynamicWeight { get; private set; }
+        public float PeakTireUtilization { get; private set; }
+        public VehicleSpecification Specification => _specification;
+
+        void Awake() => Initialize();
+
+        /// <summary>Configure before driving. Changing physical parameters clears actuator state.</summary>
+        public void Configure(VehicleSpecification specification, float maximumSteeringRate = 3.2f)
         {
-            [SerializeField] Transform _suspensionMount;
-            [SerializeField] bool _steerable;
-            [SerializeField] bool _driven = true;
-            [SerializeField, Min(0.01f)] float _radius = 0.15f;
-            [SerializeField, Min(0.01f)] float _suspensionRestLength = 0.08f;
-            [SerializeField, Min(0f)] float _droopTravel = 0.02f;
-            [SerializeField, Min(1f)] float _springRate = 18000f;
-            [SerializeField, Min(0f)] float _damperRate = 1800f;
-            [SerializeField, Min(0.1f)] float _maximumNormalForce = 13f;
-            [SerializeField, Min(0.0001f)] float _rotationalInertia = 0.012f;
-
-            float _angularVelocity;
-
-            public bool IsGrounded { get; private set; }
-            public float AngularVelocity => _angularVelocity;
-            public TireForce LastTireForce { get; private set; }
-            public float LastNormalForce { get; private set; }
-            public float LastLongitudinalSlip { get; private set; }
-            public float LastSlipAngleRadians { get; private set; }
-            public float LastLongitudinalVelocity { get; private set; }
-            public float LastSuspensionCompression { get; private set; }
-            public float LastSuspensionVelocity { get; private set; }
-
-            public void Step(
-                Rigidbody body,
-                Transform vehicleTransform,
-                float steeringAngleDegrees,
-                float driveTorque,
-                float brakeTorque,
-                float surfaceFriction,
-                PacejkaCoefficients longitudinalCoefficients,
-                PacejkaCoefficients lateralCoefficients,
-                LayerMask groundMask,
-                float deltaTime)
-            {
-                if (_suspensionMount == null)
-                {
-                    LastTireForce = default;
-                    ClearContactTelemetry();
-                    return;
-                }
-
-                var up = vehicleTransform.up;
-                // The arm keeps the wheel down through its rebound travel, so contact
-                // survives further than the spring's rest length. Reaching only to rest
-                // limits lift tolerance to the static sag.
-                var rayLength = _suspensionRestLength + _droopTravel + _radius;
-                IsGrounded = Physics.Raycast(
-                    _suspensionMount.position,
-                    -up,
-                    out var hit,
-                    rayLength,
-                    groundMask,
-                    QueryTriggerInteraction.Ignore);
-
-                if (!IsGrounded)
-                {
-                    LastTireForce = default;
-                    ClearContactTelemetry();
-                    // Airborne: no contact, so no slip feedback to stabilise against.
-                    IntegrateWheel(driveTorque, brakeTorque, 0f, 0f, deltaTime);
-                    return;
-                }
-
-                var suspensionLength = Mathf.Max(0f, hit.distance - _radius);
-                var compression = Mathf.Clamp(_suspensionRestLength - suspensionLength, 0f, _suspensionRestLength);
-                var pointVelocity = body.GetPointVelocity(hit.point);
-                var suspensionVelocity = Vector3.Dot(pointVelocity, hit.normal);
-                // A real damper and bump stop cannot create arbitrary load. The
-                // uncalibrated ray-cast spring once let full compression inject a
-                // many-g acceleration into the chassis, which appears as chatter.
-                // The damper is integrated implicitly. Explicitly, a corner that reaches
-                // the force ceiling accelerates the body at 15 m/s^2, gaining 150 mm/s of
-                // suspension velocity in one 10 ms step, while only 206 mm/s is enough for
-                // the damper term to cancel the spring entirely. The force therefore
-                // alternated between 0 N and the ceiling on consecutive steps, and because
-                // diagonally opposite corners alternated out of phase it drove a
-                // stationary vehicle to 5.6 rad/s with no input.
-                //
-                // Treating the damper's own reaction implicitly gives
-                //   F = (k*x - c*v) / (1 + c*dt/m_corner)
-                // which is unconditionally stable and leaves the static solution, where
-                // v is zero, exactly unchanged.
-                var cornerMass = Mathf.Max(0.0001f, body.mass * 0.25f);
-                var damperResponse = 1f + _damperRate * deltaTime / cornerMass;
-                var normalForce = Mathf.Clamp(
-                    (_springRate * compression - _damperRate * suspensionVelocity) / damperResponse,
-                    0f,
-                    _maximumNormalForce);
-                body.AddForceAtPosition(hit.normal * normalForce, hit.point, ForceMode.Force);
-
-                var steerRotation = _steerable ? Quaternion.AngleAxis(steeringAngleDegrees, up) : Quaternion.identity;
-                var forward = Vector3.ProjectOnPlane(steerRotation * vehicleTransform.forward, hit.normal).normalized;
-                var right = Vector3.Cross(hit.normal, forward).normalized;
-                var longitudinalVelocity = Vector3.Dot(pointVelocity, forward);
-                var lateralVelocity = Vector3.Dot(pointVelocity, right);
-                var wheelSurfaceVelocity = _angularVelocity * _radius;
-                var slipDenominator = Mathf.Max(1f, Mathf.Abs(longitudinalVelocity));
-                var longitudinalSlip = Mathf.Clamp((wheelSurfaceVelocity - longitudinalVelocity) / slipDenominator, -3f, 3f);
-                var slipAngle = Mathf.Atan2(lateralVelocity, Mathf.Max(0.5f, Mathf.Abs(longitudinalVelocity)));
-                LastNormalForce = normalForce;
-                LastLongitudinalSlip = longitudinalSlip;
-                LastSlipAngleRadians = slipAngle;
-                LastLongitudinalVelocity = longitudinalVelocity;
-                LastSuspensionCompression = compression;
-                LastSuspensionVelocity = suspensionVelocity;
-
-                var tireForce = CombinedSlipTireModel.Evaluate(
-                    longitudinalSlip,
-                    slipAngle,
-                    normalForce,
-                    surfaceFriction,
-                    longitudinalCoefficients,
-                    lateralCoefficients);
-                LastTireForce = tireForce;
-                body.AddForceAtPosition(forward * tireForce.Longitudinal + right * tireForce.Lateral, hit.point, ForceMode.Force);
-                IntegrateWheel(
-                    driveTorque,
-                    brakeTorque,
-                    tireForce.Longitudinal,
-                    ContactDamping(normalForce, surfaceFriction, longitudinalCoefficients, slipDenominator),
-                    deltaTime);
-            }
-
-            /// <summary>
-            /// Rate at which contact torque opposes a change in wheel speed, in N·m·s.
-            /// Derived from the slip stiffness at zero slip, <c>B·C·D·μ·Fz</c>, converted
-            /// to an angular rate through <c>∂slip/∂ω = radius / slipDenominator</c> and
-            /// back into torque through the radius. Past the tire's peak the true slope
-            /// is smaller, so this is an upper bound: it can over-damp slightly but
-            /// never under-damps, which is the safe direction for stability.
-            /// </summary>
-            float ContactDamping(float normalForce, float surfaceFriction, PacejkaCoefficients longitudinal, float slipDenominator)
-            {
-                var slipStiffness = longitudinal.B * longitudinal.C * Mathf.Max(0.001f, longitudinal.D)
-                                    * Mathf.Max(0f, surfaceFriction) * Mathf.Max(0f, normalForce);
-                return slipStiffness * _radius * _radius / Mathf.Max(0.0001f, slipDenominator);
-            }
-
-            /// <summary>
-            /// Advances wheel speed with the contact reaction treated implicitly.
-            /// Tire force depends on slip, and slip depends on this very speed, so an
-            /// explicit update is stiff: it stays stable only while
-            /// <c>deltaTime &lt; 2·inertia/contactDamping</c>, which a 1/10 scale wheel
-            /// (6e-5 kg·m²) violates by several times at a 0.01 s step. Solving the
-            /// linearised reaction implicitly removes that limit without altering any
-            /// physical parameter — see docs/physical-ai-vehicle-oscillation.md.
-            /// </summary>
-            void IntegrateWheel(float driveTorque, float brakeTorque, float longitudinalForce, float contactDamping, float deltaTime)
-            {
-                var brakeDirection = Mathf.Sign(_angularVelocity);
-                if (Mathf.Abs(_angularVelocity) < 0.01f)
-                    brakeDirection = Mathf.Sign(driveTorque - longitudinalForce * _radius);
-
-                var netTorque = driveTorque - longitudinalForce * _radius - brakeDirection * brakeTorque;
-                var effectiveInertia = _rotationalInertia + Mathf.Max(0f, contactDamping) * deltaTime;
-                var previousAngularVelocity = _angularVelocity;
-                _angularVelocity += netTorque * deltaTime / effectiveInertia;
-                if (brakeTorque > 0f && Mathf.Sign(previousAngularVelocity) != Mathf.Sign(_angularVelocity))
-                    _angularVelocity = 0f;
-            }
-
-            /// <summary>
-            /// First-order DC motor torque-speed envelope at the wheel. A fixed
-            /// torque source lets an airborne 1/10 wheel accumulate arbitrary
-            /// energy, whereas a real motor's torque falls to zero at no-load RPM.
-            /// </summary>
-            public float DriveTorque(float throttle, float maximumDriveTorque, float maximumAngularVelocity)
-            {
-                if (!_driven || Mathf.Approximately(throttle, 0f)) return 0f;
-                var requestedDirection = Mathf.Sign(throttle);
-                var spinningInRequestedDirection = Mathf.Sign(_angularVelocity) == requestedDirection;
-                var speedFraction = spinningInRequestedDirection
-                    ? Mathf.Clamp01(Mathf.Abs(_angularVelocity) / Mathf.Max(0.01f, maximumAngularVelocity))
-                    : 0f;
-                return Mathf.Clamp(throttle, -1f, 1f) * maximumDriveTorque * (1f - speedFraction);
-            }
-
-            public void ResetState()
-            {
-                _angularVelocity = 0f;
-                IsGrounded = false;
-                LastTireForce = default;
-                ClearContactTelemetry();
-            }
-
-            void ClearContactTelemetry()
-            {
-                LastNormalForce = 0f;
-                LastLongitudinalSlip = 0f;
-                LastSlipAngleRadians = 0f;
-                LastLongitudinalVelocity = 0f;
-                LastSuspensionCompression = 0f;
-                LastSuspensionVelocity = 0f;
-            }
+            var parameters = SingleTrackParameters.FromSpecification(specification);
+            parameters.MaximumSteeringRate = maximumSteeringRate;
+            parameters.Validate();
+            _specification = specification;
+            _maximumSteeringRate = maximumSteeringRate;
+            _surfaceFriction = specification.SurfaceFriction;
+            Initialize();
+            ResetState();
         }
 
-        [Header("Vehicle command")]
-        [Range(-1f, 1f), SerializeField] float _throttle;
-        [Range(0f, 1f), SerializeField] float _brake;
-        [Range(-1f, 1f), SerializeField] float _steering;
+        void Initialize()
+        {
+            _body = GetComponent<Rigidbody>();
+            var parameters = SingleTrackParameters.FromSpecification(_specification);
+            parameters.MaximumSteeringRate = _maximumSteeringRate;
+            _model = new SingleTrackVehicleModel(parameters);
+            _body.isKinematic = false;
+            _body.mass = _specification.Mass;
+            _body.centerOfMass = Vector3.up * (_specification.CenterOfGravityHeight - _specification.BodyCenterHeight);
+            _body.inertiaTensor = _specification.InertiaTensor;
+            _body.inertiaTensorRotation = Quaternion.identity;
+            _body.constraints |= PlanarMotionConstraints;
+            _body.useGravity = false;
+            _body.linearDamping = 0;
+            _body.angularDamping = 0;
+            _body.maxAngularVelocity = 100f;
+            _body.sleepThreshold = 0;
+            _body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        }
 
-        [Header("Tire and road")]
-        [SerializeField, Min(0.01f)] float _surfaceFriction = 1f;
-        [SerializeField] PacejkaCoefficients _longitudinalCoefficients = new PacejkaCoefficients(10f, 1.9f, 1f, 0.97f);
-        [SerializeField] PacejkaCoefficients _lateralCoefficients = new PacejkaCoefficients(5.2f, 1.3f, 1f, -1.6f);
-
-        [Header("Drivetrain")]
-        [SerializeField, Min(0f)] float _maximumDriveTorque = 65f;
-        [SerializeField, Min(0f)] float _maximumBrakeTorque = 120f;
-        [SerializeField, Min(0.01f)] float _maximumWheelAngularVelocity = 200f;
-        [SerializeField, Min(0f)] float _maximumSteeringAngle = 28f;
-        [SerializeField] LayerMask _groundMask = ~0;
-        [SerializeField] Wheel[] _wheels = Array.Empty<Wheel>();
-
-        Rigidbody _rigidbody;
-
-        public float Throttle { get => _throttle; set => _throttle = Mathf.Clamp(value, -1f, 1f); }
-        public float Brake { get => _brake; set => _brake = Mathf.Clamp01(value); }
-        public float Steering { get => _steering; set => _steering = Mathf.Clamp(value, -1f, 1f); }
-        public float SurfaceFriction { get => _surfaceFriction; set => _surfaceFriction = Mathf.Max(0.01f, value); }
-        public IReadOnlyList<Wheel> Wheels => _wheels;
-        public int GroundedWheelCount { get; private set; }
-        public float PeakTireUtilization { get; private set; }
-
-        /// <summary>Clears actuator and wheel-integrator state at an episode boundary.</summary>
+        /// <summary>Actuator/diagnostic reset only; the episode owner controls Rigidbody reset.</summary>
         public void ResetState()
         {
-            _throttle = 0f;
-            _brake = 0f;
-            _steering = 0f;
-            GroundedWheelCount = 0;
-            PeakTireUtilization = 0f;
-            foreach (var wheel in _wheels)
-                wheel?.ResetState();
+            _throttle = _brake = _steering = 0;
+            _actualSteeringRadians = 0;
+            FrontAxleForce = RearAxleForce = default;
+            DynamicWeight = PeakTireUtilization = 0;
         }
 
         /// <summary>
-        /// Roll and pitch are held flat, and heave is removed with them.
-        ///
-        /// Roll stiffness here is 2*k*halfTrack^2 = 27.6 N*m/rad against a roll inertia
-        /// of 0.0042 kg*m^2, a 12.9 Hz mode sampled 7.7 times per cycle at 100 Hz. That
-        /// is far short of the ~20 samples explicit integration needs, so the attitude
-        /// diverges: a stationary vehicle with no input reached 5.6 rad/s, which an
-        /// operator felt as being flung, as shaking at low speed, and as a car that kept
-        /// turning after it had stopped against a wall. Raising the inertia fourfold only
-        /// reaches 15 samples, and a 400 Hz step would cost four times the physics budget
-        /// this project spends on driving time.
-        ///
-        /// At 1/10 scale with a 0.054 m centre of gravity, attitude contributes little to
-        /// the behaviour being learned, and nothing in the planning observation reads it.
-        /// The friction circle, finite acceleration and finite steering the goals require
-        /// are all unaffected. This makes explicit what the generated scene already did:
-        /// its rigidbody carried these constraints, so only tests ever ran free.
+        /// Fresh physical state, never the previous model prediction. A teleport/rebase or
+        /// collision needs no separate notification and cannot restore a stale pose/velocity.
         /// </summary>
-        public const RigidbodyConstraints PlanarMotionConstraints =
-            RigidbodyConstraints.FreezePositionY |
-            RigidbodyConstraints.FreezeRotationX |
-            RigidbodyConstraints.FreezeRotationZ;
-
-        void Awake()
+        public SingleTrackState CaptureState()
         {
-            _rigidbody = GetComponent<Rigidbody>();
-            if (_rigidbody != null)
-                _rigidbody.constraints |= PlanarMotionConstraints;
+            if (_model == null) Initialize();
+            var rotation = _body.rotation;
+            var forward = rotation * Vector3.forward;
+            var localVelocity = Quaternion.Inverse(rotation) * _body.linearVelocity;
+            return new SingleTrackState
+            {
+                X = _body.position.z, Y = -_body.position.x,
+                Heading = Math.Atan2(-forward.x, forward.z),
+                LongitudinalVelocity = localVelocity.z, LateralVelocity = -localVelocity.x,
+                YawRate = -_body.angularVelocity.y, SteeringAngle = _actualSteeringRadians
+            };
         }
 
-        void FixedUpdate()
+        void FixedUpdate() => ApplyTireForces(Time.fixedDeltaTime);
+
+        /// <summary>
+        /// Queue tire forces once before a physics simulation. Public for isolated physics-scene
+        /// tests; manual callers must disable this component's automatic FixedUpdate.
+        /// The physical mode queues forces only. The temporary no-slip aid instead constrains
+        /// velocity before PhysX; neither mode assigns pose or uses kinematic MovePosition.
+        /// </summary>
+        public void ApplyTireForces(float dt)
         {
-            GroundedWheelCount = 0;
-            PeakTireUtilization = 0f;
-            var steeringAngle = _steering * _maximumSteeringAngle;
-            var brakeTorque = _brake * _maximumBrakeTorque;
-            foreach (var wheel in _wheels)
+            var before = CaptureState();
+            if (NoSlipAssistance)
             {
-                wheel?.Step(
-                    _rigidbody,
-                    transform,
-                    steeringAngle,
-                    wheel.DriveTorque(_throttle, _maximumDriveTorque, _maximumWheelAngularVelocity),
-                    brakeTorque,
-                    _surfaceFriction,
-                    _longitudinalCoefficients,
-                    _lateralCoefficients,
-                    _groundMask,
-                    Time.fixedDeltaTime);
-                if (wheel != null && wheel.IsGrounded)
-                {
-                    GroundedWheelCount++;
-                    PeakTireUtilization = Mathf.Max(PeakTireUtilization, wheel.LastTireForce.Utilization);
-                }
+                ApplyNoSlipAssistance(before, dt);
+                return;
             }
+            var result = _model.Step(before, new SingleTrackInput
+            {
+                Throttle = _throttle, Brake = _brake, Steering = -_steering, SurfaceFriction = _surfaceFriction
+            }, dt);
+            var delta = (before.SteeringAngle + result.State.SteeringAngle) * 0.5;
+            var sin = Math.Sin(delta);
+            var cos = Math.Cos(delta);
+            var frontForward = result.Front.Longitudinal * cos - result.Front.Lateral * sin;
+            var frontLeft = result.Front.Longitudinal * sin + result.Front.Lateral * cos;
+            var forwardForce = frontForward + result.Rear.Longitudinal;
+            var leftForce = frontLeft + result.Rear.Lateral;
+            var yawTorque = _model.Parameters.FrontDistance * frontLeft -
+                _model.Parameters.RearDistance * result.Rear.Lateral;
+            var rotation = _body.rotation;
+            _body.AddForce(rotation * new Vector3((float)-leftForce, 0, (float)forwardForce), ForceMode.Force);
+            _body.AddTorque(Vector3.up * (float)-yawTorque, ForceMode.Force);
+            _actualSteeringRadians = result.State.SteeringAngle;
+            FrontAxleForce = result.Front;
+            RearAxleForce = result.Rear;
+            DynamicWeight = (float)result.DynamicWeight;
+            PeakTireUtilization = Mathf.Max(Utilization(result.Front), Utilization(result.Rear));
+        }
+
+        /// <summary>
+        /// Fraction of full steering travel the tires can still use at the current speed,
+        /// with <paramref name="margin"/> allowing the transient turn-in that a
+        /// steady-state limit alone would forbid. An RC transmitter has a dual-rate dial
+        /// for exactly this; a keyboard has no dial, so a key press commands full lock at
+        /// any speed -- at 4 m/s a corner demanding 3.3 times the available friction.
+        /// </summary>
+        public float GripLimitedSteeringTravel(float margin)
+        {
+            if (_model == null)
+                return 1f;
+            var p = _model.Parameters;
+            var speed = Math.Abs(CaptureState().LongitudinalVelocity);
+            return Mathf.Clamp01((float)(Math.Max(0f, margin) *
+                p.GripLimitedSteeringAngle(speed, _surfaceFriction) / p.MaximumSteeringAngle));
+        }
+
+        void ApplyNoSlipAssistance(SingleTrackState before, float dt)
+        {
+            // Reuse only the straight-line drive/brake envelope. Lateral/yaw momentum is
+            // intentionally discarded in this arcade aid, not hidden as extra tire grip.
+            var drive = new SingleTrackState { LongitudinalVelocity = before.LongitudinalVelocity };
+            var result = _model.Step(drive, new SingleTrackInput
+            {
+                Throttle = _throttle, Brake = _brake, SurfaceFriction = _surfaceFriction
+            }, dt);
+            var p = _model.Parameters;
+            var target = -_steering * p.MaximumSteeringAngle;
+            _actualSteeringRadians += Math.Max(-p.MaximumSteeringRate * dt,
+                Math.Min(p.MaximumSteeringRate * dt, target - _actualSteeringRadians));
+            var speed = (float)result.State.LongitudinalVelocity;
+            var yawRate = (float)(-speed * Math.Tan(_actualSteeringRadians) / (p.FrontDistance + p.RearDistance));
+            // Mid-step heading reduces the discrete-step sideways residual. PhysX still
+            // integrates pose and resolves wall contacts AFTER this velocity constraint.
+            var direction = _body.rotation * Quaternion.AngleAxis(yawRate * dt * 0.5f * Mathf.Rad2Deg, Vector3.up) * Vector3.forward;
+            _body.linearVelocity = direction * speed;
+            _body.angularVelocity = Vector3.up * yawRate;
+            FrontAxleForce = RearAxleForce = default; // No fictitious lateral tire forces.
+            DynamicWeight = PeakTireUtilization = 0;
+        }
+
+        float Utilization(SingleTrackAxleForce axle)
+        {
+            var capacity = _surfaceFriction * axle.NormalLoad;
+            return capacity <= 0 ? 0 : (float)(Math.Sqrt(axle.Longitudinal * axle.Longitudinal +
+                axle.Lateral * axle.Lateral) / capacity);
+        }
+
+        static float FiniteClamp(float value, float min, float max)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+                throw new ArgumentOutOfRangeException(nameof(value), "Vehicle commands must be finite.");
+            return Mathf.Clamp(value, min, max);
         }
     }
 }

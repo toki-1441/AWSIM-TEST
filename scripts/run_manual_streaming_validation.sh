@@ -40,8 +40,8 @@ After the player closes, inspect player.log:
     must have occurred;
   - appended-corner evidence must contain both "left" and "right";
   - each line records retained/forward waypoint counts and total chunk count;
-  - each line also records unchanged control input, grounded-wheel mask,
-    suspension compression, and suspension velocity;
+  - each line records the planar-single-track model, unchanged control input,
+    actual steering, axle-force telemetry, and dynamic blend state;
   - capture a video while passing multiple generated chunks and a rebase;
   - after reviewing it, complete operator-assessment.json and finalize with:
       python3 scripts/validate_manual_streaming.py OUTPUT/player.log \
@@ -54,7 +54,14 @@ only the operator-driven streaming integrity evidence required before data colle
 EOF
 
 echo "Manual validation starts now. Drive far enough to trigger several generation events, then close the player."
-"$player" -physicalAiHazardProbability 0 -logFile "$log_path"
+physics_arguments=()
+if [ "${PHYSICAL_AI_ALLOW_SLIP:-0}" = 1 ]; then
+  physics_arguments+=(-physicalAiAllowSlip)
+else
+  echo "No-slip assistance is active. Logs are retained, but physical-model acceptance will fail by design."
+  echo "For physical-model acceptance, start a NEW run with PHYSICAL_AI_ALLOW_SLIP=1."
+fi
+"$player" -physicalAiHazardProbability 0 "${physics_arguments[@]}" -logFile "$log_path"
 
 if [ ! -s "$log_path" ]; then
   echo "No player log was written to $log_path; Unity's platform log location must be copied into this directory." >&2

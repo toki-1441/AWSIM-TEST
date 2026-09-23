@@ -15,4 +15,14 @@
 
 ## Current implementation priority
 
-The first technical milestone is a Linux batch-build workflow. It must use the Unity version declared in `ProjectSettings/ProjectVersion.txt`, detect a concurrently running editor, and produce an ignored local build artifact without embedding machine-specific paths.
+The active goal is operator usability: unified launch configuration, fixed/endless maps, manual
+multimodal data and annotation recording/review, and RL start/stop/resume using the same settings.
+See `docs/physical-ai-operator-workflows.md` for the full acceptance matrix and evidence.
+Vehicle physics is a stable baseline, not a research workstream. Fix failures that prevent use;
+do not make fine tyre calibration a prerequisite for collecting explicitly labelled simulator data.
+Assisted and dynamic vehicle runs may both be recorded; retain their model/settings in metadata
+and never present assisted data as physical-model or real-car validation.
+Keep GUI, configuration-file and CLI behavior consistent and reject unsupported selections visibly.
+Sensor mounting position and rotation are fixed configuration, not domain randomization.
+Do not vary the camera extrinsics by episode seed; preserve them in recordings and RL resume contracts.
+The Linux build helper remains local-only, uses the declared Unity version and preserves datasets.

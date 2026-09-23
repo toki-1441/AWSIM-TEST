@@ -3,6 +3,7 @@
 import argparse
 import base64
 import json
+import hashlib
 from pathlib import Path
 
 
@@ -11,13 +12,14 @@ def export(inputs, output):
     image_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
     for source in inputs:
+        source_id = hashlib.sha256(str(source.resolve()).encode()).hexdigest()[:12]
         # Sparse frames must never leak from one recording into the next.
         last_image = None
         for line_number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), start=1):
             frame = json.loads(line)
             encoded = frame.get("CameraJpegBase64")
             if encoded:
-                name = f"{source.stem}-{frame['EpisodeId']:06d}-{frame['Step']:06d}.jpg"
+                name = f"{source_id}-{source.stem}-{frame['EpisodeId']:06d}-{frame['Step']:06d}.jpg"
                 (image_dir / name).write_bytes(base64.b64decode(encoded))
                 last_image = f"images/{name}"
             if frame.get("Terminal") or not frame.get("Observation") or not frame.get("Command"):
@@ -29,6 +31,10 @@ def export(inputs, output):
                 "desiredLateralOffsetNormalized": frame["Command"]["DesiredLateralOffsetNormalized"],
                 "reward": frame.get("Reward", 0.0),
                 "scenarioLabel": frame.get("ScenarioLabel", ""),
+                "vehicleModel": frame.get("VehicleModel", "legacy-unspecified"),
+                "commandSpace": frame.get("CommandSpace", "legacy-unspecified"),
+                "directActuation": frame.get("DirectActuation"),
+                "sourceRecording": str(source.resolve()),
             })
     (output / "manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in manifest), encoding="utf-8")
     return len(manifest)

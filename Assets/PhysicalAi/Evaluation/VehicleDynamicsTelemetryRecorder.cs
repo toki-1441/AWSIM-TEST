@@ -11,16 +11,10 @@ using UnityEngine;
 namespace PhysicalAi.Evaluation
 {
     [Serializable]
-    public sealed class WheelDynamicsTelemetry
+    public sealed class AxleDynamicsTelemetry
     {
-        public bool grounded;
-        public float angularVelocityRadiansPerSecond;
+        public string axle;
         public float normalForceNewtons;
-        public float longitudinalSlip;
-        public float slipAngleRadians;
-        public float longitudinalVelocityMetersPerSecond;
-        public float suspensionCompressionMeters;
-        public float suspensionVelocityMetersPerSecond;
         public float longitudinalForceNewtons;
         public float lateralForceNewtons;
         public float tireUtilization;
@@ -29,6 +23,9 @@ namespace PhysicalAi.Evaluation
     [Serializable]
     public sealed class VehicleDynamicsTelemetryFrame
     {
+        public int schemaVersion = 2;
+        public string vehicleModel = "planar-single-track";
+        public string samplingPhase = "pre-physics-after-tire-force-queue";
         public int episodeSeed;
         public int step;
         public float simulationTimeSeconds;
@@ -39,13 +36,16 @@ namespace PhysicalAi.Evaluation
         public float brake;
         public float steering;
         public float surfaceFriction;
-        public int groundedWheelCount;
+        public float actualSteeringAngleRadians;
+        public float dynamicWeight;
         public float peakTireUtilization;
-        public WheelDynamicsTelemetry[] wheels;
+        // Axle force coordinates: longitudinal forward, lateral left. Normal loads
+        // are analytical support on a flat plane, not measured suspension contacts.
+        public AxleDynamicsTelemetry[] axles;
     }
 
     /// <summary>
-    /// Opt-in, per-physics-step diagnostic log for validating contact dynamics.
+    /// Opt-in, per-physics-step diagnostic log for planar dynamics (schema 2).
     /// It is deliberately separate from BC demonstrations so diagnostic signals
     /// cannot silently alter the observation/data-set contract.
     /// </summary>
@@ -84,46 +84,45 @@ namespace PhysicalAi.Evaluation
         void FixedUpdate()
         {
             if (_writer == null || _vehicle == null) return;
-            var body = _vehicle.GetComponent<Rigidbody>();
-            if (body == null) return;
-            var wheels = _vehicle.Wheels;
-            var wheelSamples = new WheelDynamicsTelemetry[wheels.Count];
-            for (var index = 0; index < wheels.Count; index++)
-            {
-                var wheel = wheels[index];
-                wheelSamples[index] = wheel == null ? new WheelDynamicsTelemetry() : new WheelDynamicsTelemetry
-                {
-                    grounded = wheel.IsGrounded,
-                    angularVelocityRadiansPerSecond = wheel.AngularVelocity,
-                    normalForceNewtons = wheel.LastNormalForce,
-                    longitudinalSlip = wheel.LastLongitudinalSlip,
-                    slipAngleRadians = wheel.LastSlipAngleRadians,
-                    longitudinalVelocityMetersPerSecond = wheel.LastLongitudinalVelocity,
-                    suspensionCompressionMeters = wheel.LastSuspensionCompression,
-                    suspensionVelocityMetersPerSecond = wheel.LastSuspensionVelocity,
-                    longitudinalForceNewtons = wheel.LastTireForce.Longitudinal,
-                    lateralForceNewtons = wheel.LastTireForce.Lateral,
-                    tireUtilization = wheel.LastTireForce.Utilization
-                };
-            }
-            var worldVelocity = body.linearVelocity;
-            Write(new VehicleDynamicsTelemetryFrame
-            {
-                episodeSeed = _episodeSeed,
-                step = _step++,
-                simulationTimeSeconds = Time.time,
-                worldVelocityMetersPerSecond = worldVelocity,
-                localVelocityMetersPerSecond = transform.InverseTransformDirection(worldVelocity),
-                angularVelocityRadiansPerSecond = body.angularVelocity,
-                throttle = _vehicle.Throttle,
-                brake = _vehicle.Brake,
-                steering = _vehicle.Steering,
-                surfaceFriction = _vehicle.SurfaceFriction,
-                groundedWheelCount = _vehicle.GroundedWheelCount,
-                peakTireUtilization = _vehicle.PeakTireUtilization,
-                wheels = wheelSamples
-            });
+            Write(CaptureFrame(_vehicle, _episodeSeed, _step++, Time.fixedTime));
         }
+
+        public static VehicleDynamicsTelemetryFrame CaptureFrame(CombinedSlipVehicle vehicle, int seed, int step, float time)
+        {
+            var body = vehicle.GetComponent<Rigidbody>();
+            var worldVelocity = body.linearVelocity;
+            return new VehicleDynamicsTelemetryFrame
+            {
+                vehicleModel = vehicle.VehicleModelName,
+                samplingPhase = vehicle.NoSlipAssistance ? "pre-physics-after-no-slip-velocity-constraint" : "pre-physics-after-tire-force-queue",
+                episodeSeed = seed,
+                step = step,
+                simulationTimeSeconds = time,
+                worldVelocityMetersPerSecond = worldVelocity,
+                localVelocityMetersPerSecond = Quaternion.Inverse(body.rotation) * worldVelocity,
+                angularVelocityRadiansPerSecond = body.angularVelocity,
+                throttle = vehicle.Throttle,
+                brake = vehicle.Brake,
+                steering = vehicle.Steering,
+                surfaceFriction = vehicle.SurfaceFriction,
+                actualSteeringAngleRadians = vehicle.ActualSteeringAngleRadians,
+                dynamicWeight = vehicle.DynamicWeight,
+                peakTireUtilization = vehicle.PeakTireUtilization,
+                axles = vehicle.NoSlipAssistance ? Array.Empty<AxleDynamicsTelemetry>() : new[] { AxleSample("front", vehicle.FrontAxleForce, vehicle.SurfaceFriction),
+                    AxleSample("rear", vehicle.RearAxleForce, vehicle.SurfaceFriction) }
+            };
+        }
+
+        static AxleDynamicsTelemetry AxleSample(string axle, SingleTrackAxleForce force, float mu) =>
+            new AxleDynamicsTelemetry
+            {
+                axle = axle,
+                normalForceNewtons = (float)force.NormalLoad,
+                longitudinalForceNewtons = (float)force.Longitudinal,
+                lateralForceNewtons = (float)force.Lateral,
+                tireUtilization = mu * force.NormalLoad <= 0 ? 0 : (float)(Math.Sqrt(
+                    force.Longitudinal * force.Longitudinal + force.Lateral * force.Lateral) / (mu * force.NormalLoad))
+            };
 
         void BeginEpisode(GeneratedCourse ignored)
         {
@@ -153,15 +152,10 @@ namespace PhysicalAi.Evaluation
 
         static bool HasCommandLineArgument(string parameter)
         {
-            foreach (var argument in Environment.GetCommandLineArgs()) if (argument == parameter) return true;
+            foreach (var argument in PhysicalAiLaunchArguments.Current) if (argument == parameter) return true;
             return false;
         }
 
-        static string GetCommandLineArg(string parameter)
-        {
-            var arguments = Environment.GetCommandLineArgs();
-            for (var index = 0; index + 1 < arguments.Length; index++) if (arguments[index] == parameter) return arguments[index + 1];
-            return null;
-        }
+        static string GetCommandLineArg(string parameter) => PhysicalAiLaunchArguments.GetValue(parameter);
     }
 }

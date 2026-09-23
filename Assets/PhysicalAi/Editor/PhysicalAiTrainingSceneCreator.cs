@@ -56,16 +56,11 @@ namespace PhysicalAi.Editor
             rigidbody.centerOfMass = new Vector3(0f, specification.CenterOfGravityHeight - specification.BodyCenterHeight, 0f);
             rigidbody.inertiaTensor = specification.InertiaTensor;
             rigidbody.inertiaTensorRotation = Quaternion.identity;
-            // MAGP's current generated venue is flat. The ray-cast tire model has
-            // no unsprung wheel masses, so letting its contact force repeatedly
-            // lift and re-contact the chassis produces a non-physical pumping mode.
-            // Keep the present simulation planar until a full wheel/suspension
-            // system is introduced for banked or uneven courses.
+            // The single-track formulation deliberately has no vertical dynamics.
             rigidbody.constraints = RigidbodyConstraints.FreezePositionY |
                                     RigidbodyConstraints.FreezeRotationX |
                                     RigidbodyConstraints.FreezeRotationZ;
-            // Ray-cast wheels do not have colliders, so the body needs its own
-            // physical envelope to be blocked by the generated duct boundaries.
+            // PhysX owns boundary collision, independently of the planar tire solve.
             var bodyCollider = vehicle.AddComponent<BoxCollider>();
             bodyCollider.size = new Vector3(specification.BodyWidth, specification.BodyHeight, specification.BodyLength);
             var dynamics = vehicle.AddComponent<CombinedSlipVehicle>();
@@ -94,7 +89,6 @@ namespace PhysicalAi.Editor
             // Built after the mounts so the donor wheels can be re-parented onto them.
             CreateVehicleBodyVisual(vehicle.transform, specification, mounts);
             ConfigureVehicle(dynamics, specification);
-            ConfigureWheels(dynamics, mounts, specification);
             SetReference(controller, "_vehicle", dynamics);
             SetReference(ros2Input, "_vehicle", dynamics);
 
@@ -182,14 +176,8 @@ namespace PhysicalAi.Editor
             var drivableSurfaceMask = LayerMask.GetMask(ProceduralCourseTrackBuilder.DrivableSurfaceLayerName);
             if (drivableSurfaceMask == 0)
                 throw new System.InvalidOperationException($"Missing required layer '{ProceduralCourseTrackBuilder.DrivableSurfaceLayerName}'.");
-            var serialized = new SerializedObject(vehicle);
-            serialized.FindProperty("_surfaceFriction").floatValue = specification.SurfaceFriction;
-            serialized.FindProperty("_maximumDriveTorque").floatValue = specification.MaximumDriveTorquePerWheel;
-            serialized.FindProperty("_maximumBrakeTorque").floatValue = specification.MaximumBrakeTorquePerWheel;
-            serialized.FindProperty("_maximumWheelAngularVelocity").floatValue = specification.MaximumWheelAngularVelocity;
-            serialized.FindProperty("_maximumSteeringAngle").floatValue = specification.MaximumSteeringAngleDegrees;
-            serialized.FindProperty("_groundMask").intValue = drivableSurfaceMask;
-            serialized.ApplyModifiedPropertiesWithoutUndo();
+            vehicle.Configure(specification);
+            EditorUtility.SetDirty(vehicle);
         }
 
         static void CreateVehicleBodyVisual(Transform vehicleRoot, VehicleSpecification specification, Transform[] wheelMounts)
@@ -348,28 +336,6 @@ namespace PhysicalAi.Editor
             serialized.FindProperty("_wallPrimaryMaterial").objectReferenceValue = PhysicalAiVisualAssets.WallPrimary();
             serialized.FindProperty("_wallAlternateMaterial").objectReferenceValue = PhysicalAiVisualAssets.WallAlternate();
             serialized.FindProperty("_courseLineMaterial").objectReferenceValue = PhysicalAiVisualAssets.CourseLine();
-            serialized.ApplyModifiedPropertiesWithoutUndo();
-        }
-
-        static void ConfigureWheels(CombinedSlipVehicle vehicle, Transform[] mounts, VehicleSpecification specification)
-        {
-            var serialized = new SerializedObject(vehicle);
-            var wheels = serialized.FindProperty("_wheels");
-            wheels.arraySize = mounts.Length;
-            for (var i = 0; i < mounts.Length; i++)
-            {
-                var wheel = wheels.GetArrayElementAtIndex(i);
-                wheel.FindPropertyRelative("_suspensionMount").objectReferenceValue = mounts[i];
-                wheel.FindPropertyRelative("_steerable").boolValue = i < 2;
-                wheel.FindPropertyRelative("_driven").boolValue = true;
-                wheel.FindPropertyRelative("_radius").floatValue = specification.TireRadius;
-                wheel.FindPropertyRelative("_suspensionRestLength").floatValue = specification.SuspensionRestLength;
-                wheel.FindPropertyRelative("_droopTravel").floatValue = specification.SuspensionDroopTravel;
-                wheel.FindPropertyRelative("_springRate").floatValue = specification.SpringRate;
-                wheel.FindPropertyRelative("_damperRate").floatValue = specification.DamperRate;
-                wheel.FindPropertyRelative("_maximumNormalForce").floatValue = specification.MaximumNormalForcePerWheel;
-                wheel.FindPropertyRelative("_rotationalInertia").floatValue = specification.WheelRotationalInertia;
-            }
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

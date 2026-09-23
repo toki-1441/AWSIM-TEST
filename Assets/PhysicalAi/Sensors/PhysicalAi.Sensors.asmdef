@@ -1,7 +1,7 @@
 {
     "name": "PhysicalAi.Sensors",
     "rootNamespace": "PhysicalAi.Sensors",
-    "references": [],
+    "references": ["PhysicalAi.Configuration", "Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.HighDefinition.Runtime"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

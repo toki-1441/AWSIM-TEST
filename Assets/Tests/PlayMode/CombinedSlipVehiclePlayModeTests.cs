@@ -14,7 +14,7 @@ namespace PhysicalAi.Tests.PlayMode
     public class CombinedSlipVehiclePlayModeTests
     {
         [UnityTest]
-        public IEnumerator TT02HighCombinedSlip_RemainsInsideFrictionCircleWhileGrounded()
+        public IEnumerator TT02HighCombinedSlip_RemainsInsideAxleFrictionCircles()
         {
             var specification = VehicleSpecification.Default;
             var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -34,16 +34,16 @@ namespace PhysicalAi.Tests.PlayMode
             vehicle.Steering = 0.8f;
 
             var maximumUtilization = 0f;
-            var groundedFrames = 0;
+            var evaluatedFrames = 0;
             for (var step = 0; step < 120; step++)
             {
                 yield return new WaitForFixedUpdate();
                 maximumUtilization = Mathf.Max(maximumUtilization, vehicle.PeakTireUtilization);
-                if (vehicle.GroundedWheelCount > 0)
-                    groundedFrames++;
+                if (vehicle.FrontAxleForce.NormalLoad > 0 && vehicle.RearAxleForce.NormalLoad > 0)
+                    evaluatedFrames++;
             }
 
-            Assert.That(groundedFrames, Is.GreaterThan(20));
+            Assert.That(evaluatedFrames, Is.GreaterThan(20));
             Assert.That(maximumUtilization, Is.GreaterThan(0.1f));
             Assert.That(maximumUtilization, Is.LessThanOrEqualTo(1.0001f));
             Assert.That(float.IsNaN(body.linearVelocity.sqrMagnitude), Is.False);
@@ -70,11 +70,7 @@ namespace PhysicalAi.Tests.PlayMode
             ConfigureVehicle(vehicle, root.transform, specification);
             vehicle.Throttle = 1f;
 
-            // Let the suspension settle before measuring, so the drop-in transient is
-            // not mistaken for a driving oscillation.
-            for (var settle = 0; settle < 60; settle++)
-                yield return new WaitForFixedUpdate();
-
+            // Include startup: the planar model has no suspension drop-in transient.
             // Horizontal only: vertical hop would otherwise be read as surging.
             var previousSpeed = HorizontalSpeed(body);
             var maximumStepAcceleration = 0f;
@@ -86,11 +82,9 @@ namespace PhysicalAi.Tests.PlayMode
                 previousSpeed = speed;
             }
 
-            // The tires cannot push the body harder than the friction available to them.
-            // Headroom is allowed for load transfer and suspension transients; before the
-            // wheel spin update was made implicit this reached roughly 60 m/s².
+            // No suspension/load-transfer headroom: the planar tire limit applies each step.
             var tractionLimit = specification.SurfaceFriction * Physics.gravity.magnitude;
-            Assert.That(maximumStepAcceleration, Is.LessThan(tractionLimit * 3f),
+            Assert.That(maximumStepAcceleration, Is.LessThan(tractionLimit * 1.01f),
                 $"peak step acceleration {maximumStepAcceleration:F1} m/s² against a {tractionLimit:F1} m/s² traction limit");
             Object.Destroy(root);
             Object.Destroy(ground);
@@ -145,10 +139,10 @@ namespace PhysicalAi.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TT02AtRestWithFreeAttitude_GeneratesNoTorque()
+        public IEnumerator TT02AppliesPlanarConstraintsAndGeneratesNoStationaryTorque()
         {
             // An operator reported the car still rotating after it had stopped against a
-            // wall, and shaking at low speed. TT02AtRest_DoesNotPumpItsSuspension cannot
+            // wall, and shaking at low speed. TT02AtRest_DoesNotBounce cannot
             // see either: it freezes roll and pitch, so any spurious torque is absorbed
             // by the constraint instead of showing up.
             var specification = VehicleSpecification.Default;
@@ -298,7 +292,7 @@ namespace PhysicalAi.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator StreamingLifecycle_PreservesFreshWheelContactAndNextStepDynamics()
+        public IEnumerator StreamingLifecycle_PreservesPlanarStateAndNextStepDynamics()
         {
             var specification = VehicleSpecification.Default;
             var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -342,11 +336,7 @@ namespace PhysicalAi.Tests.PlayMode
                     egoBody.position = course.Centerline[index] + Vector3.up * specification.BodyCenterHeight;
                     controlBody.position = new Vector3(300f, specification.BodyCenterHeight, 0f);
                     egoBody.rotation = controlBody.rotation = heading;
-                    // Unity re-derives a constrained body's orientation on the next
-                    // physics step, so a pose assigned while rotation is frozen is not
-                    // the pose that is simulated. Place unconstrained, let the
-                    // suspension settle, then freeze the settled attitude.
-                    egoBody.constraints = controlBody.constraints = RigidbodyConstraints.None;
+                    egoBody.constraints = controlBody.constraints = PlanarConstraints;
                     egoBody.linearVelocity = controlBody.linearVelocity = Vector3.zero;
                     egoBody.angularVelocity = controlBody.angularVelocity = Vector3.zero;
                     egoVehicle.ResetState();
@@ -360,40 +350,20 @@ namespace PhysicalAi.Tests.PlayMode
                     }
                     egoBody.constraints = controlBody.constraints = PlanarConstraints;
                     Assert.That((int)egoBody.constraints, Is.EqualTo(84));
-                    Assert.That(egoVehicle.GroundedWheelCount, Is.EqualTo(4),
-                        $"before cycle {cycle}: position {egoBody.position:F6}, rotation {egoBody.rotation.eulerAngles:F6}, " +
-                        $"constraints {egoBody.constraints}, inertia {egoBody.inertiaTensorRotation.eulerAngles:F6}; " +
-                        $"contacts {string.Join(",", System.Linq.Enumerable.Select(Physics.OverlapBox(egoBody.position, new Vector3(specification.BodyWidth, specification.BodyHeight, specification.BodyLength) * 0.5f, egoBody.rotation), hit => hit.name))}; " +
-                        $"control grounded {controlVehicle.GroundedWheelCount}; wheels " +
-                        string.Join(",", System.Linq.Enumerable.Select(egoVehicle.Wheels,
-                            wheel => $"{wheel.IsGrounded}/{wheel.LastSuspensionCompression:F6}/{wheel.LastNormalForce:F6}")));
-                    Assert.That(controlVehicle.GroundedWheelCount, Is.EqualTo(4));
                     Assert.That(orchestrator.RefreshStreamingCourseForCurrentPosition(), Is.True);
 
-                    // Cached pre/post telemetry alone cannot see a wall that is
-                    // destroyed later in this frame or a contact lost on the next
-                    // wheel raycast. Compare fresh simulation steps with a vehicle
-                    // receiving identical input on the unchanged supporting plane.
+                    // Advance actual physics after world maintenance, comparing against an
+                    // identical vehicle/command stream away from walls on the unchanged plane.
                     for (var step = 0; step < 8; step++)
                     {
                         yield return new WaitForFixedUpdate();
-                        Assert.That(egoVehicle.GroundedWheelCount, Is.EqualTo(4), $"cycle {cycle}, step {step}");
-                        // The control vehicle drives an unchanged flat plane while the ego
-                        // follows generated curvature, so their velocities legitimately
-                        // diverge. Comparing them cannot isolate a streaming side effect;
-                        // that comparison needs a control on identical geometry and is
-                        // tracked separately. Contact and per-wheel load below are the
-                        // properties a chunk transition must preserve.
-                        Assert.That(egoBody.linearVelocity.magnitude, Is.LessThan(10f),
-                            $"cycle {cycle}, step {step}: ego speed {egoBody.linearVelocity.magnitude:F3} m/s");
-                        // A wheel touching down inside its rebound travel legitimately
-                        // carries no load, so the invariant is that the vehicle as a whole
-                        // stays supported across the transition.
-                        var carriedLoad = 0f;
-                        foreach (var wheel in egoVehicle.Wheels)
-                            carriedLoad += wheel.LastNormalForce;
-                        Assert.That(carriedLoad, Is.GreaterThan(specification.Mass * Physics.gravity.magnitude * 0.5f),
-                            $"cycle {cycle}, step {step}: wheels carry {carriedLoad:F2} N of {specification.Mass * Physics.gravity.magnitude:F2} N");
+                        Assert.That((egoBody.linearVelocity - controlBody.linearVelocity).magnitude,
+                            Is.LessThan(0.002f), $"cycle {cycle}, step {step}: velocity diverged after streaming");
+                        Assert.That((egoBody.angularVelocity - controlBody.angularVelocity).magnitude,
+                            Is.LessThan(0.002f), $"cycle {cycle}, step {step}: yaw diverged after streaming");
+                        Assert.That(egoVehicle.ActualSteeringAngleRadians,
+                            Is.EqualTo(controlVehicle.ActualSteeringAngleRadians));
+                        Assert.That(egoVehicle.PeakTireUtilization, Is.LessThanOrEqualTo(1.00001f));
                     }
                 }
                 foreach (var kind in new[] { StreamingCourseTransitionKind.AppendAndRetire,
@@ -401,8 +371,9 @@ namespace PhysicalAi.Tests.PlayMode
                     Assert.That(transitions.Exists(transition => transition.Kind == kind), Is.True, kind.ToString());
                 foreach (var transition in transitions)
                 {
-                    Assert.That(transition.GroundedWheelMaskBefore, Is.EqualTo(15));
-                    Assert.That(transition.GroundedWheelMaskAfter, Is.EqualTo(15));
+                    Assert.That(transition.ActualSteeringAngleDelta, Is.Zero);
+                    Assert.That(transition.MaximumAxleForceDelta, Is.Zero);
+                    Assert.That(transition.DynamicWeightDelta, Is.Zero);
                     Assert.That(transition.ControlInputDelta, Is.EqualTo(Vector3.zero));
                 }
             }
@@ -430,7 +401,6 @@ namespace PhysicalAi.Tests.PlayMode
             body.inertiaTensorRotation = Quaternion.identity;
             var vehicle = root.AddComponent<CombinedSlipVehicle>();
             ConfigureVehicle(vehicle, root.transform, specification);
-            SetField(vehicle, "_groundMask", (LayerMask)(1 << groundLayer));
             return vehicle;
         }
 
@@ -466,29 +436,7 @@ namespace PhysicalAi.Tests.PlayMode
 
         static void ConfigureVehicle(CombinedSlipVehicle vehicle, Transform root, VehicleSpecification specification)
         {
-            SetField(vehicle, "_surfaceFriction", specification.SurfaceFriction);
-            SetField(vehicle, "_maximumDriveTorque", specification.MaximumDriveTorquePerWheel);
-            SetField(vehicle, "_maximumBrakeTorque", specification.MaximumBrakeTorquePerWheel);
-            SetField(vehicle, "_maximumSteeringAngle", specification.MaximumSteeringAngleDegrees);
-            var wheels = new CombinedSlipVehicle.Wheel[4];
-            for (var index = 0; index < wheels.Length; index++)
-            {
-                var mount = new GameObject($"Wheel{index}").transform;
-                mount.SetParent(root, false);
-                mount.localPosition = new Vector3(index % 2 == 0 ? -specification.TrackWidth * 0.5f : specification.TrackWidth * 0.5f, -specification.BodyHeight * 0.5f, index < 2 ? specification.DistanceToFrontAxle : -specification.DistanceToRearAxle);
-                var wheel = new CombinedSlipVehicle.Wheel();
-                SetField(wheel, "_suspensionMount", mount);
-                SetField(wheel, "_steerable", index < 2);
-                SetField(wheel, "_radius", specification.TireRadius);
-                SetField(wheel, "_suspensionRestLength", specification.SuspensionRestLength);
-                SetField(wheel, "_droopTravel", specification.SuspensionDroopTravel);
-                SetField(wheel, "_springRate", specification.SpringRate);
-                SetField(wheel, "_damperRate", specification.DamperRate);
-                SetField(wheel, "_maximumNormalForce", specification.MaximumNormalForcePerWheel);
-                SetField(wheel, "_rotationalInertia", specification.WheelRotationalInertia);
-                wheels[index] = wheel;
-            }
-            SetField(vehicle, "_wheels", wheels);
+            vehicle.Configure(specification);
         }
 
         static void SetField(object target, string name, object value) => target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(target, value);

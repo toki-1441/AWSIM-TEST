@@ -15,10 +15,10 @@ test -d "$recording_directory"
 inputs=()
 while IFS= read -r -d '' recording; do
   inputs+=("$recording")
-done < <(find "$recording_directory" -maxdepth 1 -type f -name 'teleop-*.jsonl' -print0 | sort -z)
+done < <(find "$recording_directory" -maxdepth 2 -type f \( -name 'teleop-*.jsonl' -o -path '*/teleop-*/frames.jsonl' \) -print0 | sort -z)
 
 if [ "${#inputs[@]}" -eq 0 ]; then
-  echo "No human teleoperation files matching teleop-*.jsonl in $recording_directory." >&2
+  echo "No human teleoperation files (teleop-*.jsonl or teleop-*/frames.jsonl) in $recording_directory." >&2
   echo "Reference-* recordings are intentionally excluded from the human BC dataset." >&2
   exit 1
 fi

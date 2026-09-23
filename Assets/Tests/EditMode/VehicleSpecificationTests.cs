@@ -69,13 +69,12 @@ namespace PhysicalAi.Tests.EditMode
         [Test]
         public void DriveTorque_FallsToZeroAtMotorNoLoadSpeed()
         {
-            var wheel = new CombinedSlipVehicle.Wheel();
-
-            Assert.That(wheel.DriveTorque(1f, 0.148f, 200f), Is.EqualTo(0.148f).Within(0.000001f));
-            // Advance the wheel to the no-load speed without contact.
-            var field = typeof(CombinedSlipVehicle.Wheel).GetField("_angularVelocity", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            field.SetValue(wheel, 200f);
-            Assert.That(wheel.DriveTorque(1f, 0.148f, 200f), Is.Zero);
+            var parameters = SingleTrackParameters.FromSpecification(VehicleSpecification.Default);
+            var model = new SingleTrackVehicleModel(parameters);
+            var result = model.Step(new SingleTrackState { LongitudinalVelocity = parameters.NoLoadSpeed },
+                new SingleTrackInput { Throttle = 1, SurfaceFriction = 0.9 }, 0.01);
+            Assert.That(result.Front.Longitudinal, Is.Zero);
+            Assert.That(result.Rear.Longitudinal, Is.Zero);
         }
     }
 }

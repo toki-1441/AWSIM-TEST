@@ -3,6 +3,16 @@
 This is the authoritative statement of what the Physical AI simulator is for. Where any other
 document in this directory disagrees with it, this one wins.
 
+## Active scope revision (2026-09-21)
+
+The current deliverable is the [operator collection and RL workflow](physical-ai-operator-workflows.md),
+including shared launch options, fixed/endless maps, RGB/metric depth/BEV, automatic and manual
+annotations, data review and RL start/stop/resume. Detailed tyre development is deferred. Stable
+assisted and dynamic models may both produce data when their settings and identity are recorded;
+assisted data is not evidence of physical-model or real-car fidelity. This revision supersedes the
+older blanket recording prohibition and tyre-calibration-first sequencing below. The original
+long-term planning/transfer aims remain, not prerequisites for this operator-environment delivery.
+
 ## Vision
 
 Build the training platform that lets a camera-based mobile robot, in a racing-style
@@ -66,8 +76,33 @@ can be closed continuously.
 
 ## Technical constraints
 
+Temporary operator-requested exception (2026-09-06): manual driving defaults to a no-slip
+handling aid while road/control usability is checked. Retain wall collision and streamed-world
+continuity; keep the physical model available with `-physicalAiAllowSlip`. Assisted runs must
+be labelled separately, must not generate physical-model training demonstrations, and do not
+satisfy the tire-dynamics acceptance below. See [temporary mode](physical-ai-vehicle-model.md#temporary-no-slip-manual-mode-2026-09-06).
+
 - **Engine.** Unity with ROS2ForUnity and Autoware-compatible vehicle and sensor interfaces.
-- **Vehicle physics.** No `WheelCollider`. A custom Pacejka combined-slip tire model.
+- **Vehicle physics.** No `WheelCollider`. A planar single-track model in the style of
+  `f1tenth_gym`, which switches to a kinematic formulation below 0.5 m/s because the
+  dynamic tire equations are numerically unstable there.
+
+  This replaces the four-wheel ray-cast suspension with per-wheel Pacejka tires that the
+  project carried until 2026-09-06. That model repeatedly produced non-physical motion
+  that an operator felt while driving: a 50 Hz oscillation at the timestep's Nyquist
+  frequency in longitudinal slip, suspension corners alternating between zero and their
+  force ceiling, a stationary vehicle winding itself to 5.6 rad/s, and front and rear
+  lateral forces forming a pure yaw couple at zero speed with the tires saturated. Each
+  was fixed in isolation and the next appeared elsewhere, because the common cause is
+  integrating stiff per-wheel dynamics explicitly at 100 Hz. A 400 Hz step would cost
+  four times the physics budget this project spends on driving time instead.
+
+  What the goals actually require of the physics — that a policy cannot learn a path the
+  vehicle could not drive — is carried by the friction circle, finite acceleration and
+  finite steering, all of which the single-track model keeps analytically. Attitude and
+  per-wheel load are not read by any planning observation. Vertical dynamics are dropped
+  deliberately: at 1/10 scale on a flat indoor floor with a 0.054 m centre of gravity,
+  they contribute little to the behaviour being learned and much to the instability.
 - **Map — hybrid.** Spline-based procedural generation from parameterised primitives (straight,
   corner radius, bank angle), in two forms:
   - **Training (primary): endless streaming.** A single never-ending road generated in chunks
@@ -102,8 +137,8 @@ can be closed continuously.
   visually crosses any non-adjacent retained chunk.  The same rule applies after trimming and
   after a floating-origin rebase.
 - **Generation-boundary dynamics.** A chunk append, removal or rebase is a world-management
-  operation only.  It must not alter the vehicle's pose, velocity, angular velocity, suspension
-  contact state, or controller command except for normal road/wall contact that already existed.
+  operation only. It must not alter the vehicle's pose, velocity, angular velocity, steering
+  actuator state, or controller command except for normal wall contact that already existed.
   This explicitly rules out the unexplained inertial kick reported near newly created road.
 - **Driving and visual baseline — prerequisite for learning.** The built player must be manually
   drivable with stable, predictable vehicle motion.  The road must be continuously rendered well
@@ -173,7 +208,9 @@ horizon, or retaining only the initial cache is a failure, not a partial pass.
 3. The road surface, markings, walls and colliders share the same sampled boundaries at every seam.
    There are no gaps, overlaps, z-fighting edges or wall discontinuities.
 4. Append, retirement and floating-origin events preserve rigidbody pose, linear/angular velocity,
-   suspension contact and current control input, apart from ordinary pre-existing contact forces.
+   actual steering actuator state and current control input, apart from ordinary pre-existing
+   collision forces. For the planar model, diagnostic continuity covers front/rear axle forces
+   and dynamic blend state; wheel-contact and suspension states no longer exist.
 5. A human can drive through several append/retirement cycles without persistent pumping, bouncing,
    snagging, unexplained inertia, or unintended departure through the boundary collision.
 6. The operator view and the approximately 0.15 m-high vehicle camera both show an illuminated,
@@ -183,6 +220,31 @@ Acceptance evidence must include a multi-seed geometry test, an event log listin
 primitive type, append/retirement/rebase events and vehicle-state deltas, plus a captured sustained
 manual run of the built player.  Compile success, EditMode tests, or a static screenshot alone do not
 close this milestone.
+
+### Regression acceptance: varied road that keeps extending
+
+The operator-reported regressions — a straight-only course and no next-chunk generation —
+must be checked together with intersection exclusion, not treated as acceptable ways to achieve
+it. The target is a **manually driveable, varied, continuously extending corridor**.
+
+- In the same built-player run, demonstrate at least **three forward append operations, one
+  passed-chunk retirement and one floating-origin rebase**. Record the seed and generation
+  settings so that the run can be reproduced.
+- Show non-trivial left and right curves as well as straights in the **newly appended road**,
+  not only in the initial cache. Log primitive types and remaining forward distance; verify
+  that the configured forward sight/stopping horizon is maintained throughout the drive.
+- Validate the full road-and-wall envelopes after each transition. Centre-line separation
+  alone is insufficient; rejection of an intersecting candidate must not silently result in
+  straight-only continuation or stalled generation. Record rejected candidates and any inability
+  to replenish the horizon as a failure, not as successful intersection prevention.
+- Check vehicle behaviour both around each generation event **and while approaching and driving
+  through the newly generated seams and curves**. An unchanged state at the event instant does
+  not rule out later collision snags, unexplained inertia, pumping or bouncing. Correlate the
+  drive recording with vehicle-state and contact/collision evidence along those sections.
+
+All conditions above are required together. Until the rebuilt player passes this manual run,
+report the milestone as unverified or failed; a successful build or automated test alone must
+not be described as fixing the operator-reported regressions.
 
 ## Current scope: a trustworthy data-collection and RL environment
 
@@ -266,20 +328,61 @@ are met.
 
 Agreed 2026-09-06, refining the order above for the
 [data-collection and RL environment scope](#current-scope-a-trustworthy-data-collection-and-rl-environment).
+Revised the same day after operator driving exposed defects that automated evidence had
+reported as clean.
 
-1. **Fix the contact loss across streaming transitions.** A PlayMode test that reproduces it is
-   preserved on the `wip/streaming-wheel-contact` branch: after a chunk cycle one wheel reports
-   no contact. Recording demonstrations over this would bake the artefact into the dataset.
-2. **Add mode selection**, so the remaining steps can be performed by an operator rather than
-   by remembering flags.
-3. **Verify manual teleoperation end to end** — the F8 toggle and the speed/lateral controls
-   actually reaching the vehicle in the built player. This has never been confirmed.
-4. **Pass the manual streaming validation** with its video and affirmed operator checklist.
-   `scripts/run_manual_streaming_validation.sh` already refuses evidence produced by the
-   reference planner, so this must be a genuine human drive.
-5. **Collect one human demonstration session** and confirm the dataset validation scripts
+**Done.**
+
+1. ~~Fix the contact loss across streaming transitions.~~ The ray reached only to the
+   spring's rest length, which reduces lift tolerance algebraically to the static sag —
+   2.58 mm here, against the 4.78 mm a few degrees of roll produce. The suspension gained
+   the rebound travel a real arm has.
+2. ~~Add mode selection~~, so the remaining steps need an operator rather than 23 flags.
+3. ~~Verify manual teleoperation end to end.~~ Direct input reaches the actuators and moves
+   the vehicle; the built player was driven.
+
+**In progress.**
+
+4. **Replace the vehicle model with the planar single-track formulation.** Operator driving
+   found four defects that every automated check had passed: a 31.7 mm step where wall
+   segments met, a venue floor left behind by a floating-origin rebase, a stationary vehicle
+   winding itself to 5.6 rad/s, and a saturated yaw couple at zero speed that turned the car
+   through half a revolution. The first two are fixed. The last two are the same class of
+   failure the earlier oscillation investigation found, in new places, and six attempted
+   fixes to the four-wheel model resolved two of them. The cause is common to all: stiff
+   per-wheel dynamics integrated explicitly at 100 Hz.
+
+   Implement the model as a pure calculation first and pin its behaviour before anything is
+   swapped: no yaw from rest with no input, cornering that matches `v^2/R <= mu*g`, and a
+   continuous transition across the 0.5 m/s kinematic switch. Keep `Throttle`, `Brake`,
+   `Steering` and `SurfaceFriction`, which is all that most of the thirteen dependent files
+   use. Per-wheel telemetry has to be reinterpreted for two axles rather than four corners.
+
+   **Integration progress (2026-09-06):** `SingleTrackVehicleModel` and its 29 dedicated
+   tests are implemented; all 128 EditMode and 17 graphics-enabled PlayMode cases pass. See the
+   [model contract and numerical method](physical-ai-vehicle-model.md#planar-single-track-calculation-2026-09-06).
+   `CombinedSlipVehicle` now wraps this model, keeping its control interface. The regenerated
+   scene uses the new adapter; two-axle telemetry and streaming validation use schema 2.
+   Wall collision, external state changes and subsequent physics steps after production streaming
+   transitions are covered automatically. The scene smoke test and Linux rebuild passed; a
+   12-second built-player reference run advanced 24.28 m with no collision/departure before its
+   configured timeout. Manual acceptance remains outstanding; successful automated checks alone
+   do not close the environment scope.
+
+**Then.**
+
+5. **Pass the manual streaming validation** with its video and affirmed operator checklist.
+   `scripts/run_manual_streaming_validation.sh` refuses evidence produced by the reference
+   planner, so this must be a genuine human drive.
+6. **Collect one human demonstration session** and confirm the dataset validation scripts
    accept it.
 
-Learning performance is not measured in this sequence. The mathematical-model audit findings
-are consulted only where they bear on step 1; resolving all of them is deferred so that this
-scope stays closable.
+Learning performance is not measured in this sequence.
+
+**What this revision was bought with.** Every one of those four defects was reported by
+someone driving, while the streaming instrumentation recorded a position error of 0.000000 m
+and no discontinuity throughout. That instrumentation is not broken: it samples the vehicle at
+the instant of a transition, and none of these defects act then. Geometry can bend without the
+car touching it, and a model can be unstable while no transition is in progress. Automated
+evidence bounds what it measures, not what an operator experiences, and this scope is closed by
+a human drive for that reason.

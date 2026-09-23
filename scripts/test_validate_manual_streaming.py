@@ -25,8 +25,8 @@ def transition(
         f"angular velocity 0.000000 rad/s; source {source}, "
         "control input (0.750000,0.000000,0.250000)->(0.750000,0.000000,0.250000), "
         "control delta 0.000000, "
-        "ground mask F->F, suspension compression 0.000000 m, "
-        "suspension velocity 0.000000 m/s; "
+        "model planar-single-track, actual steering 0.100000->0.100000 rad, "
+        "axle force delta 0.000000 N, dynamic weight delta 0.000000; "
         f"retained 364, forward {forward}, chunks 10, appended corner {corner}."
     )
 
@@ -61,6 +61,18 @@ class ValidateManualStreamingTests(unittest.TestCase):
         self.assertEqual("pending", report["manualVisualAssessment"])
         self.assertEqual(3, report["counts"]["appendAndRetire"])
 
+    def test_rejects_assisted_run_as_physical_model_evidence(self) -> None:
+        lines = [transition("AppendAndRetire", "left"), transition("AppendAndRetire", "right"),
+                 transition("AppendAndRetire", "left"), transition("HistoryTrim"),
+                 transition("FloatingOriginRebase"), "Physical AI manual vehicle model: planar-no-slip-assist."]
+        result, report = self.run_validator(lines)
+        self.assertEqual(1, result.returncode)
+        self.assertIn("no-slip assisted driving", " ".join(report["failures"]))
+        result, report = self.run_validator([line.replace("planar-single-track", "planar-no-slip-assist") for line in lines])
+        self.assertEqual(1, result.returncode)
+        self.assertEqual("planar-no-slip-assist", report["vehicleModel"])
+        self.assertEqual(3, report["counts"]["appendAndRetire"])
+
     def test_rejects_missing_lifecycle_and_variety(self) -> None:
         result, report = self.run_validator([transition("AppendAndRetire", "left")])
         self.assertEqual(1, result.returncode)
@@ -77,7 +89,35 @@ class ValidateManualStreamingTests(unittest.TestCase):
             ]
         )
         self.assertEqual(1, result.returncode)
-        self.assertIn("full control/contact telemetry", " ".join(report["failures"]))
+        self.assertIn("full control/planar-model telemetry", " ".join(report["failures"]))
+
+    def test_rejects_steering_axle_and_blend_changes(self) -> None:
+        for before, after in (
+            ("0.100000->0.100000 rad", "0.100000->0.200000 rad"),
+            ("axle force delta 0.000000 N", "axle force delta 0.010000 N"),
+            ("dynamic weight delta 0.000000", "dynamic weight delta 0.100000"),
+            ("position error 0.000000 m", "position error 0.100000 m"),
+            ("rotation 0.0000°", "rotation 1.0000°"),
+            ("velocity 0.000000 m/s", "velocity 1.000000 m/s"),
+            ("->(0.750000,0.000000,0.250000)", "->(0.750000,0.000000,0.750000)"),
+        ):
+            with self.subTest(field=before):
+                lines = [transition("AppendAndRetire", "left"), transition("AppendAndRetire", "right"),
+                         transition("AppendAndRetire", "left"), transition("HistoryTrim"),
+                         transition("FloatingOriginRebase")]
+                lines[0] = lines[0].replace(before, after)
+                result, report = self.run_validator(lines)
+                self.assertEqual(1, result.returncode)
+                self.assertFalse(report["instrumentedStreamingGatePassed"])
+
+    def test_rejects_legacy_wheel_telemetry_as_planar_evidence(self) -> None:
+        line = transition("AppendAndRetire", "left").replace(
+            "model planar-single-track, actual steering 0.100000->0.100000 rad, "
+            "axle force delta 0.000000 N, dynamic weight delta 0.000000; ",
+            "ground mask F->F, suspension compression 0.000000 m, suspension velocity 0.000000 m/s; ")
+        result, report = self.run_validator([line])
+        self.assertEqual(1, result.returncode)
+        self.assertIn("full control/planar-model telemetry", " ".join(report["failures"]))
 
     def test_rejects_discontinuity_even_with_complete_transitions(self) -> None:
         lines = [

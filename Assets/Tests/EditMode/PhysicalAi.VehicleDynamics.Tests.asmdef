@@ -2,6 +2,7 @@
     "name": "PhysicalAi.VehicleDynamics.Tests",
     "rootNamespace": "PhysicalAi.Tests.EditMode",
     "references": [
+        "PhysicalAi.Configuration",
         "PhysicalAi.VehicleDynamics",
         "PhysicalAi.Course",
         "PhysicalAi.Safety",

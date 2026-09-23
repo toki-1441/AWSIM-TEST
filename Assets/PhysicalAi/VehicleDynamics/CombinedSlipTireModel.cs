@@ -50,7 +50,19 @@ namespace PhysicalAi.VehicleDynamics
     public static class CombinedSlipTireModel
     {
         public static readonly PacejkaCoefficients DefaultLongitudinal = new PacejkaCoefficients(10f, 1.9f, 1f, 0.97f);
-        public static readonly PacejkaCoefficients DefaultLateral = new PacejkaCoefficients(5.2f, 1.3f, 1f, -1.6f);
+        /// <summary>
+        /// Lateral curve for each axle. B is applied to a slip angle in RADIANS, so it
+        /// sets where the force peaks: alpha_peak = 1.657 / B for this C and E. The
+        /// previous shared B of 5.2 put the peak at 18.1 degrees, so the car had to crab
+        /// more than twice as far as a real tire to reach the grip the friction circle
+        /// already assumed, and every corner entry felt like a slide. Rubber peaks
+        /// between roughly 4 and 12 degrees at any scale; these put the front at 8.0 and
+        /// the rear at 6.9, the front softer so the vehicle understeers rather than
+        /// spinning. Both are estimates pending a skidpad identification -- see
+        /// docs/physical-ai-vehicle-model.md.
+        /// </summary>
+        public static readonly PacejkaCoefficients DefaultLateralFront = new PacejkaCoefficients(11.9f, 1.3f, 1f, -1.6f);
+        public static readonly PacejkaCoefficients DefaultLateralRear = new PacejkaCoefficients(13.8f, 1.3f, 1f, -1.6f);
 
         public static TireForce Evaluate(
             float longitudinalSlip,

@@ -1,7 +1,7 @@
 {
     "name": "PhysicalAi.Safety",
     "rootNamespace": "PhysicalAi.Safety",
-    "references": ["PhysicalAi.Course", "PhysicalAi.VehicleDynamics"],
+    "references": ["PhysicalAi.Course", "PhysicalAi.VehicleDynamics", "PhysicalAi.Configuration"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

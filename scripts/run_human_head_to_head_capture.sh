@@ -42,7 +42,7 @@ EOF
   -physicalAiDemonstrationScenario human-head-to-head-overtake \
   -logFile "$output_directory/player.log"
 
-recording_count=$(find "$output_directory" -maxdepth 1 -type f -name 'teleop-*.jsonl' | wc -l)
+recording_count=$(find "$output_directory" -maxdepth 2 -type f \( -name 'teleop-*.jsonl' -o -path '*/teleop-*/frames.jsonl' \) | wc -l)
 if [ "$recording_count" -eq 0 ]; then
   echo "No human recordings were captured. Rerun and use F8 while driving." >&2
   exit 1

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 import subprocess
 import sys
@@ -28,9 +29,10 @@ TRANSITION_PATTERN = re.compile(
     r"control input \((?P<throttle_before>[0-9.eE+-]+),(?P<brake_before>[0-9.eE+-]+),(?P<steering_before>[0-9.eE+-]+)\)"
     r"->\((?P<throttle_after>[0-9.eE+-]+),(?P<brake_after>[0-9.eE+-]+),(?P<steering_after>[0-9.eE+-]+)\), "
     r"control delta (?P<control_delta>[0-9.eE+-]+), "
-    r"ground mask (?P<ground_before>[0-9A-Fa-f]+)->(?P<ground_after>[0-9A-Fa-f]+), "
-    r"suspension compression (?P<compression>[0-9.eE+-]+) m, "
-    r"suspension velocity (?P<suspension_velocity>[0-9.eE+-]+) m/s; "
+    r"model (?P<model>planar-single-track|planar-no-slip-assist), actual steering (?P<actual_steering_before>[0-9.eE+-]+)"
+    r"->(?P<actual_steering_after>[0-9.eE+-]+) rad, "
+    r"axle force delta (?P<axle_force>[0-9.eE+-]+) N, "
+    r"dynamic weight delta (?P<dynamic_weight>[0-9.eE+-]+); "
     r"retained (?P<retained>\d+), forward (?P<forward>\d+), chunks (?P<chunks>\d+), "
     r"appended corner (?P<corner>left|right|none)\."
 )
@@ -81,11 +83,14 @@ def validate(log_path: Path, minimum_appends: int) -> dict:
     )
     failures: list[str] = []
 
+    if "planar-no-slip-assist" in text:
+        failures.append("no-slip assisted driving cannot certify the physical vehicle model")
+
     if "Physical AI streaming discontinuity" in text:
         failures.append("the player reported a streaming discontinuity")
     if len(matches) != len(all_transition_lines):
         failures.append(
-            f"{len(all_transition_lines) - len(matches)} transition line(s) lack the full control/contact telemetry contract"
+            f"{len(all_transition_lines) - len(matches)} transition line(s) lack the full control/planar-model telemetry contract"
         )
     if kinds["AppendAndRetire"] < minimum_appends:
         failures.append(
@@ -112,12 +117,12 @@ def validate(log_path: Path, minimum_appends: int) -> dict:
         control_delta = float(match.group("control_delta"))
         if control_delta > 0.000001:
             failures.append(f"transition {index} changed a control input")
-        if match.group("ground_before").lower() != match.group("ground_after").lower():
-            failures.append(f"transition {index} changed the grounded-wheel mask")
-        if float(match.group("compression")) > 0.000001:
-            failures.append(f"transition {index} changed suspension compression")
-        if float(match.group("suspension_velocity")) > 0.000001:
-            failures.append(f"transition {index} changed suspension velocity")
+        if abs(float(match.group("actual_steering_after")) - float(match.group("actual_steering_before"))) > 0.000001:
+            failures.append(f"transition {index} changed the steering actuator state")
+        if abs(float(match.group("axle_force"))) > 0.000001:
+            failures.append(f"transition {index} changed axle force telemetry")
+        if abs(float(match.group("dynamic_weight"))) > 0.000001:
+            failures.append(f"transition {index} changed the dynamic blend state")
 
     maxima = {
         "positionErrorMeters": max((float(match.group("position")) for match in matches), default=None),
@@ -136,15 +141,35 @@ def validate(log_path: Path, minimum_appends: int) -> dict:
             ),
             default=None,
         ),
-        "suspensionCompressionDeltaMeters": max(
-            (float(match.group("compression")) for match in matches), default=None
+        "actualSteeringAngleDeltaRadians": max(
+            (abs(float(match.group("actual_steering_after")) - float(match.group("actual_steering_before"))) for match in matches), default=None
         ),
-        "suspensionVelocityDeltaMetersPerSecond": max(
-            (float(match.group("suspension_velocity")) for match in matches), default=None
+        "axleForceDeltaNewtons": max(
+            (abs(float(match.group("axle_force"))) for match in matches), default=None
+        ),
+        "dynamicWeightDelta": max(
+            (abs(float(match.group("dynamic_weight"))) for match in matches), default=None
         ),
     }
+    # A log's "is continuous" label is not proof. Check the numbers independently,
+    # including control values rather than trusting only the writer's delta field.
+    limits = {
+        "positionErrorMeters": 0.0001,
+        "rotationErrorDegrees": 0.01,
+        "linearVelocityDeltaMetersPerSecond": 0.001,
+        "angularVelocityDeltaRadiansPerSecond": 0.001,
+        "controlInputDelta": 0.000001,
+        "actualSteeringAngleDeltaRadians": 0.000001,
+        "axleForceDeltaNewtons": 0.000001,
+        "dynamicWeightDelta": 0.000001,
+    }
+    for field, limit in limits.items():
+        value = maxima[field]
+        if value is not None and (not math.isfinite(value) or abs(value) > limit):
+            failures.append(f"{field} exceeds continuity tolerance {limit}")
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
+        "vehicleModel": "planar-no-slip-assist" if "planar-no-slip-assist" in text else "planar-single-track",
         "createdUtc": datetime.now(timezone.utc).isoformat(),
         "sourceLog": str(log_path.resolve()),
         "sourceLogSha256": hashlib.sha256(raw).hexdigest(),

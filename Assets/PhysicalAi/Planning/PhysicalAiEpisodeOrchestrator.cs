@@ -40,10 +40,10 @@ namespace PhysicalAi.Planning
         public readonly Vector3 ControlInputBefore;
         public readonly Vector3 ControlInputAfter;
         public readonly string CommandSource;
-        public readonly int GroundedWheelMaskBefore;
-        public readonly int GroundedWheelMaskAfter;
-        public readonly float MaximumSuspensionCompressionDelta;
-        public readonly float MaximumSuspensionVelocityDelta;
+        public readonly float ActualSteeringAngleBefore;
+        public readonly float ActualSteeringAngleAfter;
+        public readonly float MaximumAxleForceDelta;
+        public readonly float DynamicWeightDelta;
         public readonly int RetainedWaypointCount;
         public readonly int ForwardWaypointCount;
         public readonly int ChunkCount;
@@ -54,8 +54,8 @@ namespace PhysicalAi.Planning
             Quaternion rotationBefore, Quaternion rotationAfter,
             Vector3 linearVelocityDelta, Vector3 angularVelocityDelta,
             Vector3 controlInputBefore, Vector3 controlInputAfter, string commandSource,
-            int groundedWheelMaskBefore, int groundedWheelMaskAfter,
-            float maximumSuspensionCompressionDelta, float maximumSuspensionVelocityDelta,
+            float actualSteeringAngleBefore, float actualSteeringAngleAfter,
+            float maximumAxleForceDelta, float dynamicWeightDelta,
             int retainedWaypointCount, int forwardWaypointCount, int chunkCount,
             int appendedCornerDirection)
         {
@@ -69,10 +69,10 @@ namespace PhysicalAi.Planning
             ControlInputBefore = controlInputBefore;
             ControlInputAfter = controlInputAfter;
             CommandSource = commandSource;
-            GroundedWheelMaskBefore = groundedWheelMaskBefore;
-            GroundedWheelMaskAfter = groundedWheelMaskAfter;
-            MaximumSuspensionCompressionDelta = maximumSuspensionCompressionDelta;
-            MaximumSuspensionVelocityDelta = maximumSuspensionVelocityDelta;
+            ActualSteeringAngleBefore = actualSteeringAngleBefore;
+            ActualSteeringAngleAfter = actualSteeringAngleAfter;
+            MaximumAxleForceDelta = maximumAxleForceDelta;
+            DynamicWeightDelta = dynamicWeightDelta;
             RetainedWaypointCount = retainedWaypointCount;
             ForwardWaypointCount = forwardWaypointCount;
             ChunkCount = chunkCount;
@@ -82,7 +82,7 @@ namespace PhysicalAi.Planning
         public Vector3 UnexpectedPositionDelta => PositionDelta - ExpectedPositionDelta;
         public float RotationDeltaDegrees => Quaternion.Angle(RotationBefore, RotationAfter);
         public Vector3 ControlInputDelta => ControlInputAfter - ControlInputBefore;
-        public bool GroundContactChanged => GroundedWheelMaskBefore != GroundedWheelMaskAfter;
+        public float ActualSteeringAngleDelta => Mathf.Abs(ActualSteeringAngleAfter - ActualSteeringAngleBefore);
     }
 
     /// <summary>
@@ -144,6 +144,19 @@ namespace PhysicalAi.Planning
         Vector3 _episodeStartPosition;
         Quaternion _episodeStartRotation;
         bool _episodeEnded;
+        string _configuredMapMode;
+        int _configuredSeed;
+        bool _requiresRl;
+        CourseMapDocument _loadedMap;
+        BevAnnotationCapture _bevCapture;
+        public BevObservation CurrentBev { get; private set; }
+        public bool EpisodeEnded => _episodeEnded;
+        public string MapMode => _streamingCourse == null ? "fixed" : "endless";
+        public string MapHash { get; private set; }
+        public string MapSourceHash => _loadedMap?.ContentHash;
+        public string CourseSettingsJson => JsonUtility.ToJson(_courseSettings);
+        public Vector3 FloatingOriginOffset { get; private set; }
+        public CourseMapDocument CaptureMap() => CourseMapDocument.Capture(_course, Vector3.zero, 0, _trackHalfWidth);
         int _rewardedEgoOvertakeCount;
         int _rewardedOpponentOvertakeCount;
         bool _visibilitySafetyDisabled;
@@ -158,6 +171,7 @@ namespace PhysicalAi.Planning
         public event Action<bool, bool, bool> EpisodeFinished;
         /// <summary>Raised immediately after every append/retire, trim, or world rebase.</summary>
         public event Action<StreamingCourseTransition> StreamingTransitioned;
+        public string VehicleModelName => _vehicle == null ? "unknown" : _vehicle.VehicleModelName;
         public Func<PlanningObservation, PlanningCommand> CommandProvider;
         /// <summary>
         /// Interactive driving applies throttle, brake, and steering directly.
@@ -193,6 +207,8 @@ namespace PhysicalAi.Planning
             get
             {
                 if (ManualActuationOverride) return "manual-teleoperation";
+                if (_requiresRl && (GetComponent<PythonRlBridge>() == null || !GetComponent<PythonRlBridge>().IsConnected))
+                    return "rl-disconnected";
                 if (CommandProvider != null)
                 {
                     var declaringType = CommandProvider.Method.DeclaringType;
@@ -211,6 +227,23 @@ namespace PhysicalAi.Planning
             _rigidbody = _vehicle != null ? _vehicle.GetComponent<Rigidbody>() : null;
             _episodeStartPosition = transform.position;
             _episodeStartRotation = transform.rotation;
+            _configuredMapMode = PhysicalAiLaunchArguments.GetValue("-physicalAiMapMode");
+            if (_configuredMapMode != null && _configuredMapMode != "endless" && _configuredMapMode != "fixed")
+                throw new ArgumentException("Map mode must be fixed or endless.");
+            _episodeSeed = PhysicalAiLaunchArguments.GetInt("-physicalAiSeed", _episodeSeed);
+            _configuredSeed = _episodeSeed;
+            _requiresRl = PhysicalAiLaunchArguments.HasFlag("-physicalAiRlPort") || PhysicalAiLaunchArguments.GetValue("-physicalAiMode") == "rl";
+            if (_configuredMapMode != null) _useStreamingTraining = _configuredMapMode == "endless";
+            var mapPath = PhysicalAiLaunchArguments.GetValue("-physicalAiMapPath");
+            if (!string.IsNullOrEmpty(mapPath))
+            {
+                if (_configuredMapMode != "fixed") throw new ArgumentException("A map file requires fixed-map mode.");
+                _loadedMap = CourseMapDocument.Load(mapPath);
+                _trackHalfWidth = _loadedMap.halfWidth;
+                if (_trackBuilder != null) _trackBuilder.RoadWidth = _trackHalfWidth * 2;
+            }
+            var model = PhysicalAiLaunchArguments.GetValue("-physicalAiVehicleModel");
+            if (_vehicle != null && model != null) _vehicle.NoSlipAssistance = model == "assisted";
             _visibilitySafetyDisabled = HasCommandLineArgument("-physicalAiDisableVisibilitySafety");
             var headToHead = HasCommandLineArgument("-physicalAiHeadToHead");
             SetHeadToHeadEnabled(headToHead);
@@ -223,7 +256,7 @@ namespace PhysicalAi.Planning
                     GetCommandLineFloat("-physicalAiOpponentLateralOscillationFrequencyHz"));
         }
 
-        void Start() => ResetEpisode(_episodeSeed);
+        void Start() { if (_course == null) ResetEpisode(_episodeSeed); }
 
         public void ResetEpisode(int seed)
         {
@@ -247,14 +280,24 @@ namespace PhysicalAi.Planning
         void ResetEpisode(int seed, bool useHoldoutCourse)
         {
             _episodeSeed = seed;
-            ResetVehicleState();
+            var loadedFixedMap = _configuredMapMode == "fixed" && _loadedMap != null && !useHoldoutCourse;
+            var startPose = loadedFixedMap ? _loadedMap.StartPose(_episodeStartPosition.y) :
+                new Pose(_episodeStartPosition, _episodeStartRotation);
+            ResetVehicleState(startPose);
             ResetTransformFrameOrigins();
+            FloatingOriginOffset = Vector3.zero;
             // ResetVehicleState may be called from an episode-finished callback in
             // the same physics tick. At that point Transform can still expose the
             // previous episode's off-course pose even though the Rigidbody has been
             // reset. Course generation must use the authoritative reset position.
             var courseOrigin = new Vector3(_episodeStartPosition.x, 0f, _episodeStartPosition.z);
-            if (_useStreamingTraining && !useHoldoutCourse)
+            if (_configuredMapMode == "fixed" && !useHoldoutCourse)
+            {
+                _streamingCourse = null;
+                _course = _loadedMap != null ? _loadedMap.Instantiate(Vector3.zero, 0) :
+                    ClosedHoldoutCourseGenerator.Generate(_configuredSeed, _courseSettings, courseOrigin, _episodeStartRotation.eulerAngles.y);
+            }
+            else if (_useStreamingTraining && !useHoldoutCourse)
             {
                 _streamingCourse = new StreamingCourseState();
                 _streamingCourse.Reset(seed, _courseSettings, courseOrigin, _episodeStartRotation.eulerAngles.y);
@@ -280,30 +323,29 @@ namespace PhysicalAi.Planning
             LastCollisionWasBlindCornerHazard = false;
             LastCollisionWasOpponent = false;
             _hazardSpawner?.SpawnCourseHazard(_course, seed);
+            MapHash = CaptureMap().ContentHash;
             _demonstrationRecorder?.BeginEpisode(seed);
             CourseGenerated?.Invoke(_course);
+            Debug.Log($"Physical AI episode ready: seed {seed}, map {MapMode}, samples {_course.Centerline.Count}, model {VehicleModelName}.");
         }
 
-        void ResetVehicleState()
+        void ResetVehicleState(Pose pose)
         {
             _vehicle?.ResetState();
             if (_rigidbody == null)
                 return;
-            _rigidbody.position = _episodeStartPosition;
-            _rigidbody.rotation = _episodeStartRotation;
+            _rigidbody.position = pose.position;
+            _rigidbody.rotation = pose.rotation;
             _rigidbody.linearVelocity = Vector3.zero;
             _rigidbody.angularVelocity = Vector3.zero;
-            // Evaluation commonly resets from EpisodeFinished during a FixedUpdate.
-            // The wheel raycasts run in that same physics tick, so leave neither the
-            // Rigidbody nor its child suspension mounts at the prior off-course pose.
-            // Sleeping here could then preserve an ungrounded vehicle for the whole
-            // following episode.
+            // Synchronise the reset before the tire adapter and sensors sample this tick.
             Physics.SyncTransforms();
             _rigidbody.WakeUp();
         }
 
         void FixedUpdate()
         {
+            if (_requiresRl && (GetComponent<PythonRlBridge>() == null || !GetComponent<PythonRlBridge>().IsConnected)) return;
             if (_episodeEnded || _course == null || _vehicle == null || _lowLevelController == null || _rigidbody == null)
                 return;
 
@@ -339,6 +381,12 @@ namespace PhysicalAi.Planning
             if (_cameraObservationSensor != null && _cameraObservationSensor.CaptureIfDue())
             {
                 var cameraFrame = _cameraObservationSensor.CurrentFrame();
+                if (PhysicalAiLaunchArguments.GetValue("-physicalAiBev") == "true")
+                {
+                    _bevCapture ??= new BevAnnotationCapture(PhysicalAiLaunchArguments.GetInt("-physicalAiBevSize", 128),
+                        PhysicalAiLaunchArguments.GetFloat("-physicalAiBevMetersPerPixel", 0.1f));
+                    CurrentBev = _bevCapture.Capture(_trackBuilder, _vehicle.transform, cameraFrame.FrameIndex, cameraFrame.SimulationTime);
+                }
                 _demonstrationRecorder?.QueueCameraFrame(cameraFrame);
                 CameraObservationReady?.Invoke(cameraFrame);
             }
@@ -372,6 +420,7 @@ namespace PhysicalAi.Planning
             if (_episodeEnded)
                 return;
             _episodeEnded = true;
+            Debug.Log($"Physical AI episode ended: completed={completed}, collision={collision}, offCourse={offCourse}, timedOut={timedOut}, progress={ProgressMeters:F2} m.");
             var speed = _rigidbody == null ? 0f : _rigidbody.linearVelocity.magnitude;
             var safeSpeed = _course == null || _rigidbody == null
                 ? 0f
@@ -505,6 +554,7 @@ namespace PhysicalAi.Planning
                 return;
             var stateBefore = CaptureVehicleState();
             var offset = -planarPosition;
+            FloatingOriginOffset -= offset;
             _streamingCourse.Translate(offset);
             _trackBuilder?.Translate(offset);
             if (_venueFloor != null)
@@ -528,9 +578,10 @@ namespace PhysicalAi.Planning
             public readonly Vector3 LinearVelocity;
             public readonly Vector3 AngularVelocity;
             public readonly Vector3 ControlInput;
-            public readonly int GroundedWheelMask;
-            public readonly float[] SuspensionCompressions;
-            public readonly float[] SuspensionVelocities;
+            public readonly float ActualSteeringAngle;
+            public readonly float DynamicWeight;
+            public readonly Vector3 FrontAxleForce;
+            public readonly Vector3 RearAxleForce;
 
             public VehicleState(Rigidbody body, CombinedSlipVehicle vehicle)
             {
@@ -541,35 +592,17 @@ namespace PhysicalAi.Planning
                 ControlInput = vehicle == null
                     ? Vector3.zero
                     : new Vector3(vehicle.Throttle, vehicle.Brake, vehicle.Steering);
-                var wheels = vehicle == null ? null : vehicle.Wheels;
-                var wheelCount = wheels == null ? 0 : wheels.Count;
-                SuspensionCompressions = new float[wheelCount];
-                SuspensionVelocities = new float[wheelCount];
-                var groundedWheelMask = 0;
-                for (var index = 0; index < wheelCount; index++)
-                {
-                    var wheel = wheels[index];
-                    if (wheel == null)
-                        continue;
-                    if (wheel.IsGrounded && index < 32)
-                        groundedWheelMask |= 1 << index;
-                    SuspensionCompressions[index] = wheel.LastSuspensionCompression;
-                    SuspensionVelocities[index] = wheel.LastSuspensionVelocity;
-                }
-                GroundedWheelMask = groundedWheelMask;
+                ActualSteeringAngle = vehicle == null ? 0 : vehicle.ActualSteeringAngleRadians;
+                DynamicWeight = vehicle == null ? 0 : vehicle.DynamicWeight;
+                FrontAxleForce = vehicle == null ? Vector3.zero : ForceVector(vehicle.FrontAxleForce);
+                RearAxleForce = vehicle == null ? Vector3.zero : ForceVector(vehicle.RearAxleForce);
             }
+
+            static Vector3 ForceVector(SingleTrackAxleForce force) =>
+                new Vector3((float)force.Longitudinal, (float)force.Lateral, (float)force.NormalLoad);
         }
 
         VehicleState CaptureVehicleState() => new VehicleState(_rigidbody, _vehicle);
-
-        static float MaximumAbsoluteDelta(float[] before, float[] after)
-        {
-            var count = Mathf.Min(before == null ? 0 : before.Length, after == null ? 0 : after.Length);
-            var maximum = 0f;
-            for (var index = 0; index < count; index++)
-                maximum = Mathf.Max(maximum, Mathf.Abs(after[index] - before[index]));
-            return maximum;
-        }
 
         void PublishStreamingTransition(StreamingCourseTransitionKind kind, VehicleState before,
             Vector3 expectedPositionDelta, int appendedCornerDirection = 0)
@@ -583,9 +616,10 @@ namespace PhysicalAi.Planning
                 after.LinearVelocity - before.LinearVelocity,
                 after.AngularVelocity - before.AngularVelocity,
                 before.ControlInput, after.ControlInput, ActivePolicyLabel,
-                before.GroundedWheelMask, after.GroundedWheelMask,
-                MaximumAbsoluteDelta(before.SuspensionCompressions, after.SuspensionCompressions),
-                MaximumAbsoluteDelta(before.SuspensionVelocities, after.SuspensionVelocities),
+                before.ActualSteeringAngle, after.ActualSteeringAngle,
+                Mathf.Max((after.FrontAxleForce - before.FrontAxleForce).magnitude,
+                    (after.RearAxleForce - before.RearAxleForce).magnitude),
+                Mathf.Abs(after.DynamicWeight - before.DynamicWeight),
                 _course == null ? 0 : _course.Centerline.Count,
                 _course == null || _progressMonitor == null ? 0 :
                     Mathf.Max(0, _course.Centerline.Count - 1 - _progressMonitor.NearestWaypointIndex),
@@ -601,6 +635,8 @@ namespace PhysicalAi.Planning
                 transformFrame.ResetFloatingOrigin();
         }
 
+        void OnDestroy() => _bevCapture?.Dispose();
+
         void OnCollisionEnter(Collision collision)
         {
             if (_episodeEnded || collision.collider == null)
@@ -615,6 +651,7 @@ namespace PhysicalAi.Planning
         {
             if (CommandProvider != null)
                 return CommandProvider(observation);
+            if (_requiresRl) return default; // Never silently turn an RL run into reference/BC driving.
             if (_behaviorCloningPolicy != null && _behaviorCloningPolicy.TryPredict(observation, out var bcCommand))
                 return bcCommand;
             return ReferencePlanningPolicy.Choose(waypoints, observation.Features[1], _trackHalfWidth,
@@ -623,23 +660,16 @@ namespace PhysicalAi.Planning
 
         static bool HasCommandLineArgument(string parameter)
         {
-            foreach (var argument in Environment.GetCommandLineArgs())
+            foreach (var argument in PhysicalAiLaunchArguments.Current)
                 if (argument == parameter) return true;
             return false;
         }
 
         static float? GetCommandLineFloat(string parameter)
         {
-            var arguments = Environment.GetCommandLineArgs();
-            for (var index = 0; index + 1 < arguments.Length; index++)
-            {
-                if (arguments[index] != parameter)
-                    continue;
-                return float.TryParse(arguments[index + 1], out var parsed) &&
-                       !float.IsNaN(parsed) && !float.IsInfinity(parsed)
-                    ? parsed : (float?)null;
-            }
-            return null;
+            return float.TryParse(PhysicalAiLaunchArguments.GetValue(parameter), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed) && !float.IsNaN(parsed) && !float.IsInfinity(parsed)
+                ? parsed : (float?)null;
         }
 
     }

@@ -67,7 +67,7 @@ namespace PhysicalAi.Planning
             new PhysicalAiMode(
                 "manual-drive",
                 "Manual driving",
-                "Drive the generated course yourself. F8 toggles teleoperation and starts recording.",
+                "Drive the generated course yourself. F8 toggles recording, R restarts the episode.",
                 Array.Empty<string>(),
                 new[]
                 {

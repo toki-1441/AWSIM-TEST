@@ -19,6 +19,38 @@ namespace PhysicalAi.Tests.EditMode
         const string ScenePath = "Assets/PhysicalAi/Scenes/PhysicalAiTraining.unity";
 
         [Test]
+        public void DynamicsTelemetry_ReportsTwoAnalyticalAxlesWithoutInventedWheelContacts()
+        {
+            var root = new GameObject("PlanarTelemetryTest");
+            try
+            {
+                var vehicle = root.AddComponent<CombinedSlipVehicle>();
+                vehicle.Configure(VehicleSpecification.Default);
+                vehicle.Throttle = 0.3f;
+                vehicle.ApplyTireForces(0.01f);
+                var frame = VehicleDynamicsTelemetryRecorder.CaptureFrame(vehicle, 7, 12, 0.12f);
+                Assert.That(frame.schemaVersion, Is.EqualTo(2));
+                Assert.That(frame.vehicleModel, Is.EqualTo("planar-single-track"));
+                Assert.That(frame.axles.Length, Is.EqualTo(2));
+                Assert.That(frame.axles[0].axle, Is.EqualTo("front"));
+                Assert.That(frame.axles[1].axle, Is.EqualTo("rear"));
+                Assert.That(frame.axles[0].normalForceNewtons + frame.axles[1].normalForceNewtons,
+                    Is.EqualTo(vehicle.Specification.Mass * 9.81f).Within(1e-5f));
+                var json = JsonUtility.ToJson(frame);
+                Assert.That(json, Does.Not.Contain("wheels"));
+                Assert.That(json, Does.Not.Contain("grounded"));
+                Assert.That(json, Does.Not.Contain("suspension"));
+                Assert.That(json, Does.Contain("pre-physics-after-tire-force-queue"));
+                vehicle.NoSlipAssistance = true;
+                frame = VehicleDynamicsTelemetryRecorder.CaptureFrame(vehicle, 7, 13, 0.13f);
+                Assert.That(frame.vehicleModel, Is.EqualTo("planar-no-slip-assist"));
+                Assert.That(frame.axles, Is.Empty);
+                Assert.That(frame.samplingPhase, Is.EqualTo("pre-physics-after-no-slip-velocity-constraint"));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [Test]
         public void TrainingScene_WiresVehicleCameraOrchestratorRandomizationAndRos2Input()
         {
             EditorSceneManager.OpenScene(ScenePath);
@@ -123,8 +155,10 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(ground.layer, Is.EqualTo(drivableLayer));
 
             var vehicle = Object.FindFirstObjectByType<CombinedSlipVehicle>();
-            var groundMask = new SerializedObject(vehicle).FindProperty("_groundMask").intValue;
-            Assert.That(groundMask, Is.EqualTo(1 << drivableLayer));
+            Assert.That(new SerializedObject(vehicle).FindProperty("_wheels"), Is.Null,
+                "The runtime must not retain the old wheel integrators.");
+            Assert.That(vehicle.Specification.Wheelbase, Is.EqualTo(0.257f).Within(1e-6f));
+            Assert.That(vehicle.GetComponent<Rigidbody>().useGravity, Is.False);
         }
 
         [Test]
@@ -184,6 +218,8 @@ namespace PhysicalAi.Tests.EditMode
             serialized.FindProperty("_vehicle").objectReferenceValue = vehicle;
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
+            planner.SetActive(true);
+            Assert.That(vehicle.NoSlipAssistance, Is.True);
             planner.ApplyDirectInput(1f, -1f);
             Assert.That(vehicle.Throttle, Is.EqualTo(1f));
             Assert.That(vehicle.Brake, Is.Zero);
@@ -192,6 +228,8 @@ namespace PhysicalAi.Tests.EditMode
             Assert.That(vehicle.Throttle, Is.Zero);
             Assert.That(vehicle.Brake, Is.Zero);
             Assert.That(vehicle.Steering, Is.Zero);
+            planner.SetActive(false);
+            Assert.That(vehicle.NoSlipAssistance, Is.False);
             Object.DestroyImmediate(root);
         }
 

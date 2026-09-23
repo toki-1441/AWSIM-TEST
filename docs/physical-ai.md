@@ -1,5 +1,10 @@
 # Physical AI
 
+Interactive manual driving currently defaults to a temporary **no-slip handling aid**.
+Use `-physicalAiAllowSlip` to restore tire dynamics. Assisted drives cannot certify physical
+handling, but may record explicitly labelled simulator data. The active goal is
+[operator collection and RL workflows](physical-ai-operator-workflows.md).
+
 A scale autonomous-racing stack layered on AWSIM, targeting the Tamiya class of
 **MAGP (Minicar Autonomous Grand-Prix)**, the Japanese localisation of RoboRacer / F1TENTH.
 It adds procedurally generated, physically feasible courses, a combined-slip vehicle model,
@@ -129,7 +134,7 @@ Build/AWSIM.x86_64 -physicalAiReferenceDriver
 # append and a floating-origin rebase occurs, then close the player. The script
 # preserves Player.log and emits an instrumentation report. It accepts only
 # manual-teleoperation transitions and checks pose/velocity, control input,
-# grounded-wheel state, suspension state, horizon, lifecycle and curve variety.
+# actual steering, axle forces, model blend state, horizon, lifecycle and curve variety.
 scripts/run_manual_streaming_validation.sh Build/validation/manual-streaming-001
 # Record at least 30 seconds of the same run. Review it, fill the generated
 # operator-assessment.json, and run the finalization command written to
@@ -137,7 +142,7 @@ scripts/run_manual_streaming_validation.sh Build/validation/manual-streaming-001
 # manual gate; an automated reference-driver log is rejected.
 # Save comparable run artifacts outside Unity's persistent-data default.
 Build/AWSIM.x86_64 -physicalAiRlPort 5015 -physicalAiEvaluation holdout -physicalAiReportDirectory Build/evaluations/run-001
-# Record body and per-wheel diagnostics without changing BC/RL observations.
+# Record body and two-axle diagnostics (schema 2) without changing BC/RL observations.
 # HDRP player evaluation requires an available graphics display.
 Build/AWSIM.x86_64 -physicalAiEvaluation holdout -physicalAiRecordDynamicsTelemetry \
   -physicalAiReportDirectory Build/evaluations/dynamics-001 -physicalAiQuitAfterEvaluation
@@ -221,13 +226,19 @@ asserts the wiring.
 
 ## Status
 
-17 EditMode test files (89 cases) and six graphics-enabled PlayMode cases pass.
+The 2026-09-06 integration run passed all 128 EditMode cases in 20 test files,
+including 29 single-track calculation cases, and 17 graphics-enabled PlayMode cases.
+The single-track runtime adapter and production streaming transitions are covered; human
+manual-drive acceptance of the replacement remains pending.
+The Linux player has been rebuilt and exercised for a 12-second reference-driver smoke run
+(24.28 m progress, no collision/departure, ending at the configured timeout).
 The PlayMode runner keeps its generated empty bootstrap scene: the ordinary
 player bootstrap recognises `-runTests` and does not load AWSIM's Autoware demo.
 
 | Subsystem | Implemented | Unit-tested | Active in the scene |
 | --- | --- | --- | --- |
-| Combined-slip vehicle and tire model | yes | tire model + dynamics acceleration regression | yes; opt-in per-wheel diagnostic JSONL |
+| Combined-slip tire model | yes | force and friction-circle regression | lateral coefficients feed the single-track calculation |
+| Planar single-track replacement | calculation + PhysX adapter | 29 calculation cases, adapter and streaming PlayMode tests | yes, behind `CombinedSlipVehicle`; opt-in schema-2 two-axle JSONL |
 | Vehicle specification (MAGP class TT-02) | yes | yes | yes |
 | Physics-constrained course generation | yes | yes | yes |
 | Procedural track, progress and departure | yes | yes; open/closed route-distance and finish-line regressions | yes |

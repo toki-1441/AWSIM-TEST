@@ -29,6 +29,21 @@ namespace PhysicalAi.Planning
                 if (argument == "-runTests")
                     return;
 
+            try
+            {
+                arguments = PhysicalAiLaunchArguments.Current;
+                PhysicalAi.Configuration.SimulatorLaunchSettings.ValidateCurrentArguments();
+                var map = PhysicalAiLaunchArguments.GetValue("-physicalAiMapPath");
+                if (!string.IsNullOrEmpty(map)) PhysicalAi.Course.CourseMapDocument.Load(map);
+            }
+            catch (Exception error)
+            {
+                Debug.LogError("Physical AI launch configuration: " + error.Message);
+                if (Application.isBatchMode || Array.IndexOf(arguments, "-physicalAiQuitAfterEvaluation") >= 0) Application.Quit(2);
+                else PhysicalAiModeSelectionScreen.ShowError(error.Message);
+                return;
+            }
+
             // The command line stays authoritative: when it already chooses what to
             // run, start there directly.
             if (PhysicalAiModeCatalog.CommandLineSelectsAMode(arguments))

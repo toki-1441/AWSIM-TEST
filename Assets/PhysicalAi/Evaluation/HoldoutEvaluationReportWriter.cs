@@ -138,12 +138,6 @@ namespace PhysicalAi.Evaluation
             }, true);
         }
 
-        static string GetCommandLineArg(string parameter)
-        {
-            var arguments = Environment.GetCommandLineArgs();
-            for (var index = 0; index + 1 < arguments.Length; index++)
-                if (arguments[index] == parameter) return arguments[index + 1];
-            return null;
-        }
+        static string GetCommandLineArg(string parameter) => PhysicalAiLaunchArguments.GetValue(parameter);
     }
 }

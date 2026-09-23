@@ -19,8 +19,8 @@ namespace PhysicalAi.Randomization
         {
             MinimumFriction = 0.6f,
             MaximumFriction = 1.2f,
-            MaximumMountPositionOffset = 0.03f,
-            MaximumMountRotationDegrees = 3f
+            MaximumMountPositionOffset = 0f,
+            MaximumMountRotationDegrees = 0f
         };
     }
 
@@ -45,38 +45,30 @@ namespace PhysicalAi.Randomization
             if (settings.MaximumFriction < settings.MinimumFriction)
                 throw new ArgumentException("Maximum friction must be at least minimum friction.", nameof(settings));
             var random = new System.Random(seed);
-            float Uniform(float magnitude) => Mathf.Lerp(-magnitude, magnitude, (float)random.NextDouble());
             return new DomainSample(
                 Mathf.Lerp(settings.MinimumFriction, settings.MaximumFriction, (float)random.NextDouble()),
-                new Vector3(Uniform(settings.MaximumMountPositionOffset), Uniform(settings.MaximumMountPositionOffset), Uniform(settings.MaximumMountPositionOffset)),
-                new Vector3(Uniform(settings.MaximumMountRotationDegrees), Uniform(settings.MaximumMountRotationDegrees), Uniform(settings.MaximumMountRotationDegrees)));
+                Vector3.zero, Vector3.zero);
         }
     }
 
-    /// <summary>Applies a reproducible road and sensor-mount randomization at every episode reset.</summary>
+    /// <summary>Randomizes road friction only. Sensor mounting poses are fixed configuration, never episode noise.</summary>
     public sealed class DomainRandomizer : MonoBehaviour
     {
         [SerializeField] CombinedSlipVehicle _vehicle;
         [SerializeField] Transform[] _sensorMounts = Array.Empty<Transform>();
         [SerializeField] DomainRandomizationSettings _settings = default;
 
-        Vector3[] _basePositions;
-        Quaternion[] _baseRotations;
         float _frictionScale = 1f;
+        public DomainRandomizationSettings Settings => _settings;
+        public float FrictionScale => _frictionScale;
 
         void Awake()
         {
             if (_settings.MinimumFriction <= 0f)
                 _settings = DomainRandomizationSettings.Default;
-            _basePositions = new Vector3[_sensorMounts.Length];
-            _baseRotations = new Quaternion[_sensorMounts.Length];
-            for (var i = 0; i < _sensorMounts.Length; i++)
-            {
-                if (_sensorMounts[i] == null)
-                    continue;
-                _basePositions[i] = _sensorMounts[i].localPosition;
-                _baseRotations[i] = _sensorMounts[i].localRotation;
-            }
+            // Ignore legacy serialized nonzero mount-noise settings as well as new defaults.
+            _settings.MaximumMountPositionOffset = 0;
+            _settings.MaximumMountRotationDegrees = 0;
         }
 
         public DomainSample ApplyEpisodeSeed(int seed)
@@ -84,13 +76,6 @@ namespace PhysicalAi.Randomization
             var sample = DomainRandomizationSampler.Sample(seed, _settings);
             if (_vehicle != null)
                 _vehicle.SurfaceFriction = sample.Friction * _frictionScale;
-            for (var i = 0; i < _sensorMounts.Length; i++)
-            {
-                if (_sensorMounts[i] == null)
-                    continue;
-                _sensorMounts[i].localPosition = _basePositions[i] + sample.MountPositionOffset;
-                _sensorMounts[i].localRotation = _baseRotations[i] * Quaternion.Euler(sample.MountRotationOffsetDegrees);
-            }
             return sample;
         }
 

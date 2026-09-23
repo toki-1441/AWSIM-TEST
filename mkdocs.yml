@@ -110,6 +110,7 @@ nav:
     - Experimental:
       - Running headless: DeveloperGuide/Experimental/RunningHeadless/index.md
   - Physical AI:
+    - Operator Workflows: physical-ai-operator-workflows.md
     - Overview: physical-ai.md
     - Goals: physical-ai-goals.md
     - Vehicle model: physical-ai-vehicle-model.md

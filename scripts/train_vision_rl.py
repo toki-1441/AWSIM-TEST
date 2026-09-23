@@ -10,8 +10,11 @@ import argparse
 import base64
 from io import BytesIO
 import json
+import math
+import os
 from pathlib import Path
 import socketserver
+import tempfile
 
 import numpy as np
 from PIL import Image
@@ -53,7 +56,9 @@ class VisionPolicy(nn.Module):
 
 class VisionReinforceTrainer:
     def __init__(self, learning_rate, discount, device, entropy_coefficient=0.001, baseline_decay=0.95,
-                 initialize_from=None):
+                 initialize_from=None, resume=None):
+        if initialize_from and resume:
+            raise ValueError("Choose weight initialization OR full training resume, not both")
         self.learning_rate, self.discount, self.device = learning_rate, discount, device
         self.entropy_coefficient = entropy_coefficient
         self.baseline_decay = baseline_decay
@@ -65,6 +70,25 @@ class VisionReinforceTrainer:
         self.return_baseline = 0.0
         self.return_scale = 1.0
         self.initialize_from = Path(initialize_from) if initialize_from else None
+        self.environment_contract = None
+        self._resume = None
+        if resume:
+            self._resume = torch.load(resume, map_location=device, weights_only=True)
+            if self._resume.get("training_schema") != 2 or not self._resume.get("environment_contract"):
+                raise ValueError("Resume requires an operator checkpoint with optimizer and environment state; use --initialize-from for weights only")
+            self.environment_contract = self._resume["environment_contract"]
+            self.episode = self._resume["completed_episodes"]
+            self.return_baseline, self.return_scale = self._resume["return_baseline"], self._resume["return_scale"]
+            settings = self._resume["training_settings"]
+            self.learning_rate, self.discount = settings["learning_rate"], settings["discount"]
+            self.entropy_coefficient, self.baseline_decay = settings["entropy_coefficient"], settings["baseline_decay"]
+
+    def bind_environment(self, contract):
+        if not isinstance(contract, dict) or contract.get("schemaVersion") != 1:
+            raise ValueError("Unsupported operator environment contract")
+        if self.environment_contract is not None and self.environment_contract != contract:
+            raise ValueError("Environment/settings differ from the checkpoint; resume rejected")
+        self.environment_contract = contract
 
     def _ensure_policy(self, observation):
         if self.policy is None:
@@ -78,6 +102,16 @@ class VisionReinforceTrainer:
                 self.policy.load_state_dict(checkpoint["model_state"])
                 print(f"initialised policy from {self.initialize_from}", flush=True)
             self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.learning_rate)
+            if self._resume:
+                if self._resume["vector_width"] != len(observation):
+                    raise ValueError("Resume observation layout does not match the environment")
+                self.policy.load_state_dict(self._resume["model_state"])
+                self.optimizer.load_state_dict(self._resume["optimizer_state"])
+                # Network construction consumes random values; restore sampling state AFTER construction.
+                torch.set_rng_state(self._resume["torch_rng_state"].cpu())
+                if self.device.type == "cuda" and self._resume.get("cuda_rng_states"):
+                    torch.cuda.set_rng_state_all([state.cpu() for state in self._resume["cuda_rng_states"]])
+                self._resume = None
         if self.policy.head[0].in_features != 16 + len(observation):
             raise ValueError("Observation layout changed during training")
 
@@ -143,15 +177,35 @@ class VisionReinforceTrainer:
         if self.policy is None:
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save({"vector_width": self.policy.head[0].in_features - 16, "model_state": self.policy.state_dict()}, path)
+        checkpoint = {
+            "training_schema": 2, "architecture": "legacy", "vector_width": self.policy.head[0].in_features - 16,
+            "model_state": self.policy.state_dict(), "optimizer_state": self.optimizer.state_dict(),
+            "completed_episodes": self.episode, "return_baseline": self.return_baseline, "return_scale": self.return_scale,
+            "environment_contract": self.environment_contract,
+            "training_settings": {"learning_rate": self.learning_rate, "discount": self.discount,
+                                  "entropy_coefficient": self.entropy_coefficient, "baseline_decay": self.baseline_decay},
+            "torch_rng_state": torch.get_rng_state(),
+            "cuda_rng_states": torch.cuda.get_rng_state_all() if self.device.type == "cuda" else [],
+            "resume_boundary": "between episodes; operator-stop truncates and updates the current rollout",
+        }
+        # Keep the preceding complete checkpoint recoverable if writing is interrupted.
+        descriptor, temporary = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+        os.close(descriptor)
+        try:
+            torch.save(checkpoint, temporary)
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
 
 
 class TrainerServer(socketserver.TCPServer):
     allow_reuse_address = True
 
-    def __init__(self, address, handler, trainer, checkpoint, metrics):
+    def __init__(self, address, handler, trainer, checkpoint, metrics, require_contract=False):
         super().__init__(address, handler)
         self.trainer, self.checkpoint, self.metrics = trainer, checkpoint, metrics
+        self.require_contract = require_contract
 
     def record(self, metric):
         self.metrics.parent.mkdir(parents=True, exist_ok=True)
@@ -162,28 +216,65 @@ class TrainerServer(socketserver.TCPServer):
 class Handler(socketserver.StreamRequestHandler):
     def handle(self):
         print(f"client connected: {self.client_address[0]}:{self.client_address[1]}", flush=True)
-        logged_first_request = False
-        for raw in self.rfile:
-            if not logged_first_request:
-                print(f"first request received: {len(raw)} bytes", flush=True)
-                logged_first_request = True
-            request = json.loads(raw)
-            if request.get("type") == "step":
-                self.server.trainer.reward_previous(request.get("reward", 0.0))
-                action = self.server.trainer.act(request.get("observation", []), request.get("cameraJpegBase64"))
-                self.wfile.write((json.dumps(action) + "\n").encode("utf-8"))
-                # A planning decision can be sent at 10 Hz, which is too sparse to
-                # fill StreamRequestHandler's output buffer incidentally. Unity waits
-                # synchronously for this action, so every response must be visible to
-                # the socket immediately rather than relying on buffer pressure.
-                self.wfile.flush()
-            elif request.get("type") == "terminal":
-                metric = self.server.trainer.finish_episode(request.get("reward", 0.0))
-                self.server.trainer.save(self.server.checkpoint)
-                self.server.record(metric)
-                self.wfile.write(b'{"ack":true}\n')
-                self.wfile.flush()
-                print(f"episode {metric['episode']}: return={metric['return']:.3f}, steps={metric['steps']}", flush=True)
+        bound = False
+        episode_context = None
+        try:
+            for raw in self.rfile:
+                request = json.loads(raw)
+                kind = request.get("type")
+                if kind == "hello":
+                    self.server.trainer.bind_environment(request.get("environment"))
+                    bound = True
+                    self.respond({"ack": True, "completedEpisodes": self.server.trainer.episode})
+                    continue
+                if self.server.require_contract and not bound:
+                    raise ValueError("Environment handshake required before training")
+                if kind == "step":
+                    if self.server.require_contract and not request.get("cameraJpegBase64"):
+                        raise ValueError("Visual training requires an actual camera frame")
+                    if self.server.require_contract:
+                        episode_id, frame_id = request.get("episodeId"), request.get("cameraFrameIndex")
+                        timestamp, camera_time = request.get("simulationTime"), request.get("cameraSimulationTime")
+                        if not isinstance(episode_id, int) or episode_id < 0 or not isinstance(frame_id, int) or frame_id < 1:
+                            raise ValueError("Missing episode/camera frame identity")
+                        if not all(isinstance(value, (int, float)) and math.isfinite(value) for value in (timestamp, camera_time)) or not 0 <= timestamp - camera_time <= 1 / self.server.trainer.environment_contract["cameraHz"] + 0.02:
+                            raise ValueError("Camera observation is not synchronized with the RL step")
+                        if episode_context is None:
+                            episode_context = {"episodeId": episode_id, "firstCameraFrame": frame_id, "firstSimulationTime": timestamp}
+                        elif episode_id != episode_context["episodeId"]:
+                            raise ValueError("Episode changed without a terminal transition")
+                        episode_context.update(lastCameraFrame=frame_id, lastSimulationTime=timestamp)
+                    self.server.trainer.reward_previous(request.get("reward", 0.0))
+                    action = self.server.trainer.act(request.get("observation", []), request.get("cameraJpegBase64"))
+                    self.respond(action)
+                elif kind in ("terminal", "stop"):
+                    if self.server.trainer.rollout:
+                        metric = self.server.trainer.finish_episode(request.get("reward", 0.0))
+                        metric.update(episode_context or {})
+                        episode_context = None
+                        metric["reason"] = request.get("reason") or ("operator-stop" if kind == "stop" else "terminal")
+                        self.server.trainer.save(self.server.checkpoint)
+                        self.server.record(metric)
+                        print(f"episode {metric['episode']}: return={metric['return']:.3f}, steps={metric['steps']}", flush=True)
+                    self.respond({"ack": True, "completedEpisodes": self.server.trainer.episode})
+                    if kind == "stop":
+                        return
+                else:
+                    raise ValueError("Unsupported RL request type")
+        except (ValueError, KeyError, RuntimeError) as error:
+            self.respond({"error": str(error)})
+            print(f"RL session rejected: {error}", flush=True)
+        except (ConnectionError, OSError) as error:
+            print(f"RL connection lost: {error}", flush=True)
+        finally:
+            if self.server.trainer.rollout:
+                self.server.record({"event": "connection-lost", "discardedSteps": len(self.server.trainer.rollout),
+                                    "completedEpisodes": self.server.trainer.episode})
+                self.server.trainer.rollout.clear()
+
+    def respond(self, value):
+        self.wfile.write((json.dumps(value, allow_nan=False) + "\n").encode("utf-8"))
+        self.wfile.flush()
 
 
 def main():
@@ -196,15 +287,29 @@ def main():
     parser.add_argument("--entropy-coefficient", type=float, default=0.001)
     parser.add_argument("--initialize-from", type=Path,
                         help="compatible visual-BC or REINFORCE checkpoint used as the initial policy")
+    parser.add_argument("--resume", type=Path, help="resume optimizer, statistics and RNG at an episode boundary")
+    parser.add_argument("--require-contract", action="store_true", help="require operator handshake and actual RGB frames")
+    parser.add_argument("--architecture", choices=("legacy",), default="legacy")
+    parser.add_argument("--threads", type=int, default=1, help="CPU threads for this single-environment baseline")
+    parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
     args = parser.parse_args()
+    if args.output.exists() or args.metrics.exists():
+        parser.error("Choose new checkpoint/metrics output paths; existing runs are never overwritten at startup")
+    if args.resume and args.initialize_from:
+        parser.error("--resume and --initialize-from are mutually exclusive")
+    if args.threads < 1:
+        parser.error("--threads must be positive")
+    torch.set_num_threads(args.threads)
+    torch.manual_seed(args.seed)
     if args.device == "cuda" and not torch.cuda.is_available():
         raise SystemExit("--device cuda was requested but CUDA is unavailable")
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available() else args.device if args.device != "auto" else "cpu")
     trainer = VisionReinforceTrainer(args.learning_rate, args.discount, device, args.entropy_coefficient,
-                                     initialize_from=args.initialize_from)
-    with TrainerServer(("127.0.0.1", args.port), Handler, trainer, args.output, args.metrics) as server:
-        print(f"Visual REINFORCE trainer on 127.0.0.1:{args.port} ({device}); checkpoints -> {args.output}")
+                                     initialize_from=args.initialize_from, resume=args.resume)
+    with TrainerServer(("127.0.0.1", args.port), Handler, trainer, args.output, args.metrics, args.require_contract) as server:
+        print(json.dumps({"type": "ready", "port": args.port, "completedEpisodes": trainer.episode}), flush=True)
+        print(f"Visual REINFORCE trainer on 127.0.0.1:{args.port} ({device}); checkpoints -> {args.output}", flush=True)
         server.serve_forever()
 
 

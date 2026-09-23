@@ -1,5 +1,226 @@
 # Vehicle model
 
+## Temporary no-slip manual mode (2026-09-06)
+
+At the operator's request, interactive keyboard driving now defaults to `planar-no-slip-assist`.
+Launch `Build/AWSIM.x86_64` and select manual driving as usual. WASD/arrow controls are unchanged.
+To restore the physical tire model, launch `Build/AWSIM.x86_64 -physicalAiAllowSlip`.
+Automated reference, ROS2/RL and evaluation runs retain the physical model; the aid is selected
+by the active keyboard driver, not by changing the vehicle specification or scene physics.
+
+The aid removes accumulated sideways velocity and yaw momentum each physics step. Speed uses
+the current body's forward velocity and the existing straight-line acceleration/braking envelope;
+yaw is prescribed from speed, wheelbase and rate-limited steering. Velocity follows the car's
+mid-step heading. This is an arcade handling constraint at the CG, not a calibrated no-slip
+two-axle model or a friction-circle solution. Small timestep/contact residuals can remain, but
+there is no free-running drift. Lateral acceleration is intentionally not limited by tire grip.
+Speed is not cached: a wall stop or episode reset cannot restore a stale pre-impact speed.
+The body stays dynamic with continuous collision detection; PhysX integrates its position and
+resolves collisions after the velocity constraint. No pose teleporting is used for driving.
+
+Assisted telemetry identifies its model and velocity-constraint sampling phase, with an empty
+axle array (no fabricated tire forces). Streaming logs also identify the assisted model.
+As of the 2026-09-21 operator-workflow revision, demonstration recording is permitted with
+explicit model/settings metadata. The physical-model acceptance validator still rejects assisted
+runs as fidelity evidence. This temporary convenience does **not** complete
+the physical handling/calibration goal. The contracts below describe the retained physical mode.
+
+Verification: the full EditMode suite passed 128/128 and graphics-enabled PlayMode passed
+22/22, including assisted forward/reverse turning, steering-release yaw cancellation, braking,
+side-impulse removal, actual wall stop/back-away and floating-origin invariance. Eleven Python
+validator tests pass, including rejection (but correct transition counting) of assisted evidence.
+These are automated checks, not an operator judgement of the new handling.
+
+## Steering travel and cornering grip (2026-09-22)
+
+The operator reported that steering was abnormal and that cornering slip at speed was
+severe. Three independent causes were found; all three were invisible to the 130 passing
+tests, because nothing asserted tire curve shape, handling balance, or how much friction
+the longitudinal solve was allowed to consume.
+
+**Coasting consumed the whole friction budget.** The coast-down term added on 2026-09-06
+was purely speed-proportional at 2.4 per second, so it demanded `2.4 * v` m/s^2 — passing
+the 8.83 m/s^2 the tires can produce at 3.68 m/s. Because `Step` applies the longitudinal
+impulse first and gives the lateral solve only `sqrt(budget^2 - longitudinal^2)`, releasing
+the throttle above that speed left *zero* cornering grip. At 4 m/s the same steering input
+produced 0.19 rad/s of yaw coasting against 1.98 rad/s with light throttle. Coasting was
+also decelerating harder than full braking, which is not what a released throttle does.
+`MaximumCoastDeceleration` now caps it at 2.0 m/s^2; coasting spends under a third of the
+rear budget at every speed, and 4 m/s rolls 4.15 m against 0.93 m on the brake.
+
+**The lateral tire curve peaked at 18.1 degrees of slip.** `B` multiplies a slip angle in
+radians, so it sets where the force peaks; at `B = 5.2` the tire only delivered the `mu*Fz`
+the friction circle already assumed after the axle had crabbed more than twice as far as
+any real tire. Rubber peaks between roughly 4 and 12 degrees at any scale. The curves are
+now split per axle and re-fitted: front peaks at 7.9 degrees, rear at 6.8.
+
+**The vehicle was exactly neutral-steer at every speed.** A single shared `TireB` served
+both axles, and `D` is a fraction of `mu*Fz`, so each axle's cornering stiffness came out
+exactly proportional to its own load and the understeer gradient `Wf/Cf - Wr/Cr` cancelled
+to zero identically — for any mass distribution, any load split, any friction. A neutral
+vehicle saturates both axles at the same instant, so it snaps into a spin instead of
+pushing wide, and its yaw gain never rolls off with speed. `TireBFront` below `TireBRear`
+restores a positive margin.
+
+Separately, a keyboard key is either off or hard over, but full lock is a 0.55 m radius
+that needs all of `mu*g` above 2.21 m/s. At 4 m/s a held key demanded 3.3 times the
+available friction and at top speed 8.4 times. `GripLimitedSteeringAngle` scales the
+operator's steering travel to what the surface can hold — what an RC driver does with the
+transmitter's dual-rate dial, which a keyboard has no way to express. Demand on a held key
+is now bounded at 1.0 times the friction limit at every speed instead of 8.4, and peak
+body slip over a second of held steering falls from 29-35 degrees to 5-21.
+
+Still an estimate: the lateral coefficients are fitted to a plausible peak slip angle, not
+identified from the vehicle. A steady-state skidpad sweep observes both `alpha_peak` and
+`C_alpha` directly and is the measurement that would replace them. `MaximumSteeringRate`
+(3.2 rad/s) also remains a provisional actuator assumption; a real TT-02 servo is faster,
+so it is conservative rather than optimistic.
+
+## Coast-down and respawn (2026-09-06)
+
+Releasing the throttle now decelerates the vehicle. The operator asked for a higher
+deceleration rate; measurement showed the brake was already at the friction limit
+(18.50 N, 8.81 m/s^2 against a limit of 8.83 m/s^2, stopping from 4 m/s in 0.91 m), so
+raising the brake parameter could not change anything. The gap was that *coasting* was
+unresisted: the keyboard maps a released key to neither throttle nor brake, and rolling
+plus aerodynamic drag alone would have carried a 1/10 car 34 m from 4 m/s.
+
+`CoastDecelerationRate` (2.4 per second, speed-proportional) stands for drivetrain drag
+and motor back-EMF, which dominate a geared RC car and are both roughly proportional to
+speed. From 4 m/s the speed now halves every 0.29 s and the vehicle rolls 1.6 m. The
+resistance is drawn from the same per-axle friction budget as drive and brake, so it
+cannot exceed available grip, and it is clamped so it can never reverse the vehicle.
+Reverse is unaffected: the throttle is signed, and only an exactly released throttle
+coasts.
+
+`R` restarts the current episode from its start pose, keeping the episode seed so the
+course is unchanged. Without it an operator who left the corridor had to quit and
+relaunch, discarding the streaming history a validation run accumulates.
+
+## Planar single-track calculation (2026-09-06)
+
+`SingleTrackVehicleModel` is the pure calculation implementation. The generated scene now runs
+it through `CombinedSlipVehicle`, whose component name and script GUID are retained for existing
+keyboard, ROS2, planner and calibration references. The four-wheel integrators have been removed.
+Passing calculation and integration tests does not close the manual driving/streaming gate.
+
+The public [F1TENTH dynamic-model implementation](https://github.com/f1tenth/f1tenth_gym/blob/main/gym/f110_gym/envs/dynamic_models.py)
+uses a single-track dynamic model with a kinematic branch below 0.5 m/s. We retain that
+low-speed design principle, not its truck parameters or its exact differential equations.
+This independently implemented solver uses body velocities, two axle impulses and bounded
+semi-implicit tire forces, so the low-speed branch cannot create unlimited grip or reset yaw.
+
+### Contract and assumptions
+
+- `SingleTrackParameters.FromSpecification` takes mass, axle distances, yaw inertia, steering
+  limit and drivetrain force/speed limits from the TT-02 specification. Gravity is explicitly
+  9.81 m/s²; the calculation does not read scene gravity or suspension state.
+- State is CG position `(X, Y)`, heading, body longitudinal/lateral velocity, yaw rate and actual
+  steering angle, in SI units and radians. X is forward at zero heading, Y is left, and positive
+  heading/steering turns left. Heading is wrapped to `[-pi, pi]`; comparisons must account for
+  that wrap. Unity's right/forward axes and steering sign require an explicit adapter.
+- Inputs retain the names `Throttle`, `Brake`, `Steering`, `SurfaceFriction`. Throttle and
+  steering are clamped to `[-1, 1]`, brake to `[0, 1]`; non-finite input and negative friction
+  are rejected. Zero friction is valid and must produce no tire force.
+- Steering is rate-limited. The provisional 3.2 rad/s limit is an actuator assumption, **not
+  a measured TT-02 servo specification**. It remains configurable.
+- Drive force follows the existing linear no-load-speed envelope, with equal per-wheel AWD
+  torque. Brake overrides throttle and opposes rolling motion without reversing it. There is
+  no wheel-spin integrator, suspension, vertical motion, load transfer or rolling resistance.
+  Neutral coasting therefore need not come to a stop; braking must stop it.
+- `Step(state, input, dt)` returns a new state, front/rear average forces and the dynamic blend
+  weight. It does not mutate the supplied values or access a Rigidbody, Transform, clock or
+  random generator. It accepts `0 < dt <= 0.02 s`; the intended runtime step is 0.01 s.
+  There are no internal substeps or allocations on the per-step path.
+
+### Force calculation and low-speed transition
+
+Static axle loads are `Fzf = m*g*lr/(lf+lr)` and `Fzr = m*g*lf/(lf+lr)`. Each axle has a
+friction impulse budget `mu*Fz*dt`. Longitudinal impulse consumes part of that budget; the
+remaining lateral limit is `sqrt((mu*Fz*dt)^2 - Jx^2)`. Thus both axles satisfy the friction
+circle and their total world acceleration cannot exceed `mu*g`. An impossible corner must
+produce slip, not an artificially imposed turning radius.
+
+Below 0.5 m/s, solve the front and rear no-lateral-slip constraints together, subject to those
+friction bounds. Above 1.0 m/s, use the existing Pacejka lateral coefficients to calculate
+secant compliance (slip velocity divided by tire force). Between the thresholds, a smoothstep
+blends compliance from zero to its dynamic value. This is a **semi-implicit linearisation**,
+not an exact nonlinear Pacejka ODE solution: the previous-state secant is held for one step.
+The coupled 2-by-2 effective-mass system is solved with both lateral impulse bounds, including
+when either or both axles saturate. No iterative convergence or 400 Hz wheel solve is needed.
+
+State and momentum are not snapped to a kinematic target at either threshold. Tire impulses
+change world momentum; integrating heading only changes the body-frame representation of that
+momentum. Unpowered tire constraints dissipate energy rather than supplying it. With adequate
+grip the low-speed steady radius tends to
+`R = (lf+lr)/(cos(beta)*tan(delta))`, where `beta = atan(lr*tan(delta)/(lf+lr))`.
+
+### Runtime ownership and telemetry
+
+The adapter reads **Rigidbody pose and velocity afresh on every FixedUpdate**, computes the two
+axle forces, and submits their resultant force and yaw torque to PhysX. It never assigns the
+calculation's predicted pose or velocity back to the body. Thus wall impulses, episode teleports
+and floating-origin translations cannot be overwritten by stale model state. Only actual steering
+actuator angle persists internally. The adapter runs after ordinary controllers (execution order
+100), before the diagnostic recorder (1000).
+
+The [Unity force API](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Rigidbody.AddForce.html)
+queues forces for the following physics simulation. PhysX owns pose integration and collision;
+the calculation's trapezoidal pose integration is used only by standalone calculation callers.
+The runtime uses the model's forces, not a second pose integration. Mass/yaw inertia come from
+the same specification, gravity and damping are disabled, vertical/pitch/roll motion is constrained,
+and continuous collision detection is enabled for the body's wall-collision envelope.
+
+Coordinate mapping is explicit: model world `(X,Y)` is Unity `(z,-x)`, body velocity `(u,v)` is
+Unity local `(z,-x)`, and model yaw/steering signs are opposite Unity's. The **public component**
+keeps positive steering = right, so D/right-arrow and the existing ROS2 mapping remain unchanged.
+`CaptureState()` reads the body, including a rebase already performed in the current frame.
+`ResetState()` clears commands, actual steering and diagnostics; the episode owner resets the body.
+
+Dynamics JSONL now uses **schema 2**, `vehicleModel: planar-single-track`, with `axles` ordered
+front/rear. Normal loads are analytical flat-ground support, not ray-cast measurements. Axle
+forces use forward/left signs; body velocity retains Unity local axes. There are no invented
+wheel angular speeds, grounded masks or suspension traces. Sampling is explicitly labelled
+`pre-physics-after-tire-force-queue`: logged forces are queued tire forces, not wall reaction forces.
+Actual body responses appear in subsequent samples.
+
+Streaming logs/validator now check actual steering, axle-force and dynamic-weight continuity in
+addition to pose, velocities and inputs. Old wheel-schema logs cannot validate this replacement.
+These immediate checks still cannot replace observing the vehicle as it crosses new geometry.
+
+### Verification and remaining acceptance
+
+`SingleTrackVehicleModelTests` checks stationary steering, finite actuation, forward/reverse
+drive and braking, axle friction circles and world acceleration, continuity at both blend
+boundaries in both directions, steady-turn radius, over-limit slip, mirror symmetry, energy
+dissipation, the reported 5.6 rad/s spin perturbation, position-rebase invariance and timestep
+convergence. These are synthetic model checks, not real-car calibration or wall-contact tests.
+The 2026-09-06 integration run passed **29/29** dedicated calculation cases, **128/128** EditMode
+cases overall and **17/17** graphics-enabled PlayMode cases with Unity 6000.0.61f1. The latter
+include eight isolated PhysX-adapter cases (real wall stop/back-away, collision-state feedback,
+rebase, reset, steering signs and force integration), plus production streaming transitions and
+subsequent physics-step comparison against a control vehicle. Ten Python streaming-validator
+tests pass. These are automated checks, **not a completed human manual-drive assessment**.
+
+The scene smoke test and `scripts/build_linux.sh` also passed. The rebuilt Linux player ran a
+single 12-second reference-planner episode (seed 10000): 24.28 m progress, no collision or departure,
+then the configured timeout (not a completed lap). All 1,200 dynamics frames use schema 2/two axles;
+peak speed was 2.10 m/s, peak step acceleration 4.62 m/s² and vertical velocity stayed zero.
+Local evidence is in `Build/validation/single-track-runtime-001/`. This reference run reports
+zero camera-observation frames and is **not** camera-policy or manual-streaming evidence.
+
+Run them using the project's Unity editor:
+
+```bash
+"$UNITY_BIN" -batchmode -nographics -projectPath "$PWD" \
+  -runTests -testPlatform EditMode -testFilter SingleTrackVehicleModelTests \
+  -testResults /tmp/single-track-tests.xml -logFile /tmp/single-track-tests.log
+```
+
+After rebuilding, repeat the captured manual streaming drive and operator checklist, then collect
+and validate a human demonstration. Neither a successful build nor these automated tests certifies
+the handling, visual quality or real-car calibration.
+
 ## Competition context
 
 The target event is **MAGP (Minicar Autonomous Grand-Prix)**, the Japanese localisation of
@@ -104,6 +325,9 @@ The vehicle model uses **200 rad/s** as its common maximum wheel angular velocit
 (6.4 m/s / 0.032 m, rounded down). Drive torque follows a first-order DC
 torque–speed envelope and becomes zero there. This prevents an airborne wheel
 from accumulating energy that the regulated drivetrain cannot supply.
+
+**Historical four-wheel parameters.** Suspension and wheel-inertia values below no longer
+participate in the dynamics solve. Static ride-height geometry still uses the old sag estimate.
 
 **Suspension.** Static load per wheel is `2.1 × 9.81 / 4 = 5.15 N`. Assuming 2.5 mm of static
 sag gives `k ≈ 2060 N/m`, rounded to **2000 N/m**. Critical damping per corner is

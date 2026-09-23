@@ -45,8 +45,10 @@ namespace PhysicalAi.Course
         [SerializeField, Min(1)] int _wallStripeSegments = 3;
 
         public int SegmentCount { get; private set; }
+        public float RoadWidth { get => _roadWidth; set => _roadWidth = Mathf.Max(0.2f, value); }
         public LineRenderer CenterlineRenderer { get; private set; }
         MeshFilter _roadSurface;
+        public MeshFilter RoadSurface => _roadSurface;
         int _firstVisibleCenterlineIndex;
 
         public void Build(GeneratedCourse course)
